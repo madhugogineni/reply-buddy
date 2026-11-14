@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Reply Buddy for X",
-  "version": "3.5.2",
+  "version": "3.5.3",
   "description": "Suggests short, human replies in your own voice on x.com. You pick one and post it yourself.",
   "permissions": [
     "storage"

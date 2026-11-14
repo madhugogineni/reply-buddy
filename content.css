@@ -125,6 +125,8 @@
 .rb-connect:disabled { opacity: 0.5; cursor: default; }
 .rb-foot .rb-conn { color: #00ba7c; }
 
-.rb-connect-panel .rb-follow { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; font-size: 13px; cursor: pointer; }
-.rb-connect-panel .rb-follow input { width: auto; margin: 0; accent-color: #00ba7c; }
+.rb-panel .rb-follow { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; font-size: 13px; cursor: pointer; }
+.rb-panel .rb-follow input { width: auto; margin: 0; accent-color: #00ba7c; }
 .rb-connect-panel .rb-opt:hover { background: rgba(0, 186, 124, 0.1); border-color: rgba(0, 186, 124, 0.35); }
+.rb-panel .rb-like input { accent-color: #f91880; }
+.rb-panel .rb-like + .rb-follow { margin-top: -4px; }

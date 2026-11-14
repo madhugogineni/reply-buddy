@@ -152,13 +152,14 @@
       .map((tpl) => tpl.replace(/\{name\}/g, name || "man"));
   }
 
-  async function doConnect(article, text, follow) {
+  async function doConnect(article, text, follow, like) {
     const info = readArticle(article);
     const { handle } = authorOf(article);
     const me = myHandle();
     if (!handle || handle.toLowerCase() === me) return toast("That's your own post.");
     const used = await safeSend({ type: "useReply", me });
     if (used && used.error === "LIMIT") return toast("You've used today's free replies. Upgrade in settings for unlimited.");
+    if (like) likePost(article);
     const { autoPost } = await chrome.storage.local.get("autoPost");
     const connectFollow = follow;
     if (connectFollow) await enqueue({ kind: "follow", handle }, true);
@@ -195,6 +196,7 @@
         <span>🤝 Connect with ${esc(name || "@" + handle)}</span>
         <button class="rb-x" title="Close">✕</button>
       </div>
+      ${likeBoxHtml(await likeDefault())}
       <label class="rb-follow"><input type="checkbox" ${connectFollow ? "checked" : ""} /> Also follow @${esc(handle)}</label>
       <div class="rb-list">${options
         .map((o, i) => `<button class="rb-opt" data-i="${i}">${esc(o)}<small>${o.length}</small></button>`)
@@ -207,12 +209,14 @@
       e.preventDefault();
       safeSend({ type: "openOptions" });
     };
-    const followBox = panel.querySelector(".rb-follow input");
+    const followBox = panel.querySelector(".rb-follow:not(.rb-like) input");
+    const likeBox = panel.querySelector(".rb-like input");
     panel.querySelectorAll(".rb-opt").forEach((b) => {
       b.onclick = () => {
         const follow = followBox.checked;
+        const like = likeBox.checked;
         closePanel();
-        doConnect(article, options[+b.dataset.i], follow);
+        doConnect(article, options[+b.dataset.i], follow, like);
       };
     });
   }
@@ -316,10 +320,15 @@
         <input type="text" placeholder="Optional nudge: agree, joke, ask a question…" />
         <button class="rb-go" type="button" title="New ideas" aria-label="New ideas"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
+      ${likeBoxHtml(true)}
       <div class="rb-list"></div>
       <div class="rb-foot"><span><a href="#" class="rb-settings">Settings</a> · <a href="#" class="rb-conn">🤝 Connect</a></span><span class="rb-meta"></span></div>`;
     document.body.appendChild(panel);
     placePanel(btn);
+    likeDefault().then((on) => {
+      const box = panel && panel.querySelector(".rb-like input");
+      if (box) box.checked = on;
+    });
 
     panel.querySelector(".rb-x").onclick = closePanel;
     panel.querySelector(".rb-conn").onclick = (e) => {
@@ -415,7 +424,11 @@
     setList(html);
 
     panel.querySelectorAll(".rb-opt").forEach((b) => {
-      b.onclick = () => insertReply(ref, res.replies[+b.dataset.i]);
+      b.onclick = () => {
+        const likeBox = panel && panel.querySelector(".rb-like input");
+        ref.like = !!(likeBox && likeBox.checked);
+        insertReply(ref, res.replies[+b.dataset.i]);
+      };
     });
   }
 
@@ -468,6 +481,21 @@
     }
   }
 
+  // Likes the post if it isn't liked yet. X shows "unlike" once it's liked, so this never unlikes.
+  function likePost(article) {
+    const likeBtn = article && article.querySelector('[data-testid="like"]');
+    if (!likeBtn) return false;
+    likeBtn.click();
+    return true;
+  }
+
+  async function likeDefault() {
+    const { likeOnReply = true } = await chrome.storage.local.get("likeOnReply").catch(() => ({}));
+    return likeOnReply;
+  }
+
+  const likeBoxHtml = (on) => `<label class="rb-follow rb-like"><input type="checkbox" ${on ? "checked" : ""} /> ♥ Also like this post</label>`;
+
   async function insertReply(ref, text) {
     const { article, info } = ref;
     const used = await safeSend({ type: "useReply", me: myHandle() });
@@ -477,6 +505,7 @@
       if (panel) wirePaywall(panel);
       return;
     }
+    if (ref.like) likePost(article);
     closePanel();
     const { autoPost } = await chrome.storage.local.get("autoPost").catch(() => ({}));
     if (autoPost && info.statusId) return enqueue({ statusId: info.statusId, text, post: info.post });
