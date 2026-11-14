@@ -2,12 +2,12 @@ importScripts("ExtPay.js", "config.js", "defaults.js", "providers.js");
 
 // ---------- payments (ExtensionPay) ----------
 // ExtPay must be started once at the top level of the service worker.
-const extpayRoot = ExtPay(RB_CONFIG.extpayId);
-extpayRoot.startBackground();
+const extpayRoot = RB_CONFIG.paywall ? ExtPay(RB_CONFIG.extpayId) : null;
+if (extpayRoot) extpayRoot.startBackground();
 // Inside callbacks the service worker may have restarted, so get a fresh handle each time.
 const ep = () => ExtPay(RB_CONFIG.extpayId);
 try {
-  extpayRoot.onPaid.addListener(() => chrome.storage.local.set({ rbPaid: { paid: true, checkedAt: Date.now() } }));
+  if (extpayRoot) extpayRoot.onPaid.addListener(() => chrome.storage.local.set({ rbPaid: { paid: true, checkedAt: Date.now() } }));
 } catch {}
 
 const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
@@ -26,6 +26,7 @@ async function isPaid(force) {
 }
 
 async function planState(handle, force) {
+  if (!RB_CONFIG.paywall) return { tier: "unlimited", used: 0, limit: 0, left: Infinity, handle: "" };
   if (handle) await chrome.storage.local.set({ rbHandle: String(handle).toLowerCase() });
   const { rbHandle = "", rbUsage } = await chrome.storage.local.get(["rbHandle", "rbUsage"]);
   const who = String(handle || rbHandle).toLowerCase();
@@ -38,6 +39,7 @@ async function planState(handle, force) {
 
 // Counts one used reply. Returns the plan, or throws LIMIT for free users who are out.
 async function useReply(handle) {
+  if (!RB_CONFIG.paywall) return planState(handle);
   const plan = await planState(handle);
   if (plan.tier === "free" && plan.left <= 0) throw new Error("LIMIT");
   const used = plan.used + 1;
@@ -95,8 +97,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       rbListModels(msg.provider, msg.key, msg.baseUrl).then((models) => ({ models, pick: rbPickModel(msg.provider, models) })),
     plan: async () => planForJson(await planState(msg.me, msg.force)),
     useReply: async () => planForJson(await useReply(msg.me)),
-    openPayment: async () => ep().openPaymentPage(),
-    openLogin: async () => ep().openLoginPage(),
+    openPayment: async () => RB_CONFIG.paywall && ep().openPaymentPage(),
+    openLogin: async () => RB_CONFIG.paywall && ep().openLoginPage(),
     learnVoice: () => learnVoice(msg),
     openOptions: async () => chrome.runtime.openOptionsPage(),
     openSetup: async () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") })

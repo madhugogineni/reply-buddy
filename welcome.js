@@ -1,6 +1,6 @@
 (async () => {
   await loadConnection();
-  $("freeNote").textContent = `Free plan: ${RB_CONFIG.freeDailyReplies} replies a day. Unlimited is ${RB_CONFIG.priceLabel}, from the extension's settings.`;
+  if (RB_CONFIG.paywall) $("freeNote").textContent = `Free plan: ${RB_CONFIG.freeDailyReplies} replies a day. Unlimited is ${RB_CONFIG.priceLabel}, from the extension's settings.`;
   const s = await chrome.storage.local.get(["apiKey", "model", "voiceHandle", "voiceLearnedAt"]);
   if (s.voiceHandle) $("handle").value = "@" + s.voiceHandle;
   if (s.apiKey && s.model) {

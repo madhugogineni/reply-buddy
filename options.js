@@ -31,6 +31,7 @@ async function save() {
 }
 
 async function loadPlan(force) {
+  if (!RB_CONFIG.paywall) return $("planCard").classList.add("hidden");
   const p = await send({ type: "plan", force });
   if (p.error) {
     $("planText").textContent = "Couldn't check your plan right now.";
