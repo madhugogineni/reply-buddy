@@ -1,4 +1,51 @@
-importScripts("defaults.js", "providers.js");
+importScripts("ExtPay.js", "config.js", "defaults.js", "providers.js");
+
+// ---------- payments (ExtensionPay) ----------
+// ExtPay must be started once at the top level of the service worker.
+const extpayRoot = ExtPay(RB_CONFIG.extpayId);
+extpayRoot.startBackground();
+// Inside callbacks the service worker may have restarted, so get a fresh handle each time.
+const ep = () => ExtPay(RB_CONFIG.extpayId);
+try {
+  extpayRoot.onPaid.addListener(() => chrome.storage.local.set({ rbPaid: { paid: true, checkedAt: Date.now() } }));
+} catch {}
+
+const today = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+const PAID_CACHE_MS = 6 * 60 * 60 * 1000;
+
+async function isPaid(force) {
+  const { rbPaid } = await chrome.storage.local.get("rbPaid");
+  if (!force && rbPaid && Date.now() - rbPaid.checkedAt < PAID_CACHE_MS) return rbPaid.paid;
+  try {
+    const user = await ep().getUser();
+    await chrome.storage.local.set({ rbPaid: { paid: !!user.paid, checkedAt: Date.now() } });
+    return !!user.paid;
+  } catch {
+    return rbPaid ? rbPaid.paid : false; // offline: trust the last answer
+  }
+}
+
+async function planState(handle, force) {
+  if (handle) await chrome.storage.local.set({ rbHandle: String(handle).toLowerCase() });
+  const { rbHandle = "", rbUsage } = await chrome.storage.local.get(["rbHandle", "rbUsage"]);
+  const who = String(handle || rbHandle).toLowerCase();
+  const used = rbUsage && rbUsage.day === today() ? rbUsage.used : 0;
+  const limit = RB_CONFIG.freeDailyReplies;
+  if (who && RB_CONFIG.ownerHandles.includes(who)) return { tier: "owner", used, limit, left: Infinity, handle: who };
+  if (await isPaid(force)) return { tier: "pro", used, limit, left: Infinity, handle: who };
+  return { tier: "free", used, limit, left: Math.max(0, limit - used), handle: who, price: RB_CONFIG.priceLabel };
+}
+
+// Counts one used reply. Returns the plan, or throws LIMIT for free users who are out.
+async function useReply(handle) {
+  const plan = await planState(handle);
+  if (plan.tier === "free" && plan.left <= 0) throw new Error("LIMIT");
+  const used = plan.used + 1;
+  await chrome.storage.local.set({ rbUsage: { day: today(), used } });
+  return { ...plan, used, left: plan.tier === "free" ? Math.max(0, plan.limit - used) : Infinity };
+}
+
+const planForJson = (p) => ({ ...p, left: p.left === Infinity ? null : p.left });
 
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
 
@@ -44,7 +91,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     },
     suggest: () => suggest(msg),
     learn: () => learn(msg),
-    listModels: () => rbListModels(msg.provider, msg.key).then((models) => ({ models, pick: rbPickModel(msg.provider, models) })),
+    listModels: () =>
+      rbListModels(msg.provider, msg.key, msg.baseUrl).then((models) => ({ models, pick: rbPickModel(msg.provider, models) })),
+    plan: async () => planForJson(await planState(msg.me, msg.force)),
+    useReply: async () => planForJson(await useReply(msg.me)),
+    openPayment: async () => ep().openPaymentPage(),
+    openLogin: async () => ep().openLoginPage(),
     learnVoice: () => learnVoice(msg),
     openOptions: async () => chrome.runtime.openOptionsPage(),
     openSetup: async () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") })
@@ -59,7 +111,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 async function getSettings() {
-  const s = await chrome.storage.local.get(["apiKey", "provider", "model", "count", "about", "rules", "samples", "pairs", "learned", "readImages"]);
+  const s = await chrome.storage.local.get(["apiKey", "provider", "model", "count", "about", "rules", "samples", "pairs", "learned", "readImages", "baseUrl"]);
   return {
     apiKey: (s.apiKey || "").trim(),
     provider: s.provider || RB_DEFAULTS.provider,
@@ -70,7 +122,8 @@ async function getSettings() {
     samples: s.samples || "",
     pairs: s.pairs || [],
     learned: s.learned || [],
-    readImages: s.readImages !== false
+    readImages: s.readImages !== false,
+    baseUrl: s.baseUrl || ""
   };
 }
 
@@ -192,14 +245,17 @@ async function loadImages(media) {
 
 async function suggest(msg) {
   const s = await getSettings();
-  if (!s.apiKey) throw new Error("NO_KEY");
+  if (!s.apiKey && s.provider !== "custom") throw new Error("NO_KEY");
   if (!s.model) throw new Error("Pick a model in settings first.");
+  const plan = await planState(msg.me);
+  if (plan.tier === "free" && plan.left <= 0) throw new Error("LIMIT");
   const images = s.readImages ? await loadImages(msg.media) : [];
   const call = (imgs) =>
     rbCallModel({
       provider: s.provider,
       key: s.apiKey,
       model: s.model,
+      baseUrl: s.baseUrl,
       system: buildSystem(s),
       user: buildUser(msg, s.count, imgs),
       images: imgs,
@@ -228,7 +284,8 @@ async function suggest(msg) {
     skip: !!(out && out.skip),
     reason: (out && out.reason) || "",
     replies,
-    sawImages
+    sawImages,
+    plan: planForJson(plan)
   };
 }
 
@@ -241,7 +298,7 @@ async function learn({ post, reply }) {
 // Build a voice from the user's own replies collected on their Replies tab.
 async function learnVoice({ replies, handle }) {
   const s = await getSettings();
-  if (!s.apiKey || !s.model) throw new Error("NO_KEY");
+  if ((!s.apiKey && s.provider !== "custom") || !s.model) throw new Error("NO_KEY");
   const clean = (replies || []).filter((r) => r.reply && r.reply.length < 400);
   if (clean.length < 5) throw new Error("Found too few replies to learn from. Reply to a few posts first, then try again.");
 
@@ -267,6 +324,7 @@ async function learnVoice({ replies, handle }) {
     provider: s.provider,
     key: s.apiKey,
     model: s.model,
+    baseUrl: s.baseUrl,
     maxTokens: 1500,
     system:
       "You study how one person writes replies on X and describe their style so another writer can copy it exactly. Be concrete and quote their real words.",

@@ -9,17 +9,33 @@
   <h1>Reply Buddy</h1>
   <p class="sub">Short replies in your voice. Nothing gets posted unless you press Reply. <a href="welcome.html">Run setup again</a></p>
 
+  <div class="card" id="planCard">
+    <h2>Your plan</h2>
+    <p id="planText" class="hint">Checking…</p>
+    <div class="bar">
+      <button id="upgrade" class="hidden">Go unlimited</button>
+      <button id="manage" class="ghost hidden">Manage subscription</button>
+      <button id="login" class="ghost">Already paid? Log in</button>
+      <button id="recheck" class="ghost">Refresh</button>
+    </div>
+  </div>
+
   <div class="card">
     <h2>AI model</h2>
     <label>Provider</label>
     <select id="provider"></select>
+    <div id="baseUrlBox" class="hidden">
+      <label>Base URL <span class="hint">any OpenAI-compatible API, e.g. Together, Fireworks, Perplexity, or Ollama at http://localhost:11434/v1</span></label>
+      <input id="baseUrl" placeholder="https://api.example.com/v1" />
+    </div>
     <label>API key <a id="keyLink" class="hint" target="_blank" rel="noopener"></a></label>
     <input id="apiKey" type="password" autocomplete="off" />
     <div class="bar"><button id="test" class="ghost">Test key and load models</button><span id="s1"></span></div>
     <div class="row">
       <div>
-        <label>Model</label>
-        <select id="model"></select>
+        <label>Model <span id="modelCount" class="hint"></span></label>
+        <input id="model" list="modelList" placeholder="pick or type a model ID" autocomplete="off" />
+        <datalist id="modelList"></datalist>
       </div>
       <div>
         <label>Options per post</label>
@@ -55,6 +71,7 @@
   </div>
   <pre id="out" class="out hidden"></pre>
 
+  <script src="config.js"></script>
   <script src="defaults.js"></script>
   <script src="providers.js"></script>
   <script src="common.js"></script>

@@ -6,6 +6,33 @@
   let current = null; // { article, info, btn }
   let pending = null; // reply we inserted, waiting for the user to post
 
+  function myHandle() {
+    return (document.querySelector('[data-testid="AppTabBar_Profile_Link"]')?.getAttribute("href") || "")
+      .replace("/", "")
+      .toLowerCase();
+  }
+
+  function paywallHtml(plan) {
+    const price = (plan && plan.price) || "a small monthly fee";
+    return `<div class="rb-pay">
+      <b>You've used today's ${plan ? plan.limit : 30} free replies.</b>
+      <span>They reset at midnight. Or go unlimited for ${esc(price)}, still with your own API key.</span>
+      <button type="button" class="rb-upgrade">Go unlimited</button>
+      <a href="#" class="rb-login">Already paid? Log in</a>
+    </div>`;
+  }
+
+  function wirePaywall(root) {
+    const up = root.querySelector(".rb-upgrade");
+    if (up) up.onclick = () => safeSend({ type: "openPayment" });
+    const li = root.querySelector(".rb-login");
+    if (li)
+      li.onclick = (e) => {
+        e.preventDefault();
+        safeSend({ type: "openLogin" });
+      };
+  }
+
   // ---------- reading posts ----------
   function textOf(el) {
     return el ? el.innerText.replace(/\s+\n/g, "\n").trim() : "";
@@ -182,7 +209,7 @@
     goBtn.disabled = true;
     const hasMedia = ref.info.media && ref.info.media.length;
     setList(`<div class="rb-loading"><span></span><span></span><span></span></div>${hasMedia ? '<div class="rb-sub">Looking at the image…</div>' : ""}`);
-    const res = await safeSend({ type: "suggest", ...ref.info, steer });
+    const res = await safeSend({ type: "suggest", ...ref.info, steer, me: myHandle() });
     ref.busy = false;
     if (current !== ref || !panel) return;
     goBtn.classList.remove("rb-spin");
@@ -196,6 +223,10 @@
           e.preventDefault();
           safeSend({ type: "openSetup" });
         };
+      } else if (err === "LIMIT") {
+        const plan = await safeSend({ type: "plan", me: myHandle() });
+        setList(paywallHtml(plan));
+        wirePaywall(panel);
       } else if (err === "RELOAD" || /context invalidated/i.test(err)) {
         setList(`<div class="rb-msg">The extension was updated. Refresh this tab.</div>`);
       } else {
@@ -210,9 +241,10 @@
     let html = items.join("");
     if (res.skip) html += `<div class="rb-note">Heads up: ${esc(res.reason || "might be one to skip")}</div>`;
     if (!items.length) html = `<div class="rb-msg">No ideas came back. Hit refresh.</div>`;
-    panel.querySelector(".rb-meta").textContent = res.sawImages
-      ? `👀 Saw ${res.sawImages} image${res.sawImages > 1 ? "s" : ""}`
-      : "";
+    const bits = [];
+    if (res.sawImages) bits.push(`👀 Saw ${res.sawImages} image${res.sawImages > 1 ? "s" : ""}`);
+    if (res.plan && res.plan.tier === "free") bits.push(`${res.plan.left} of ${res.plan.limit} free left today`);
+    panel.querySelector(".rb-meta").textContent = bits.join(" · ");
     setList(html);
 
     panel.querySelectorAll(".rb-opt").forEach((b) => {
@@ -241,6 +273,13 @@
 
   async function insertReply(ref, text) {
     const { article, info } = ref;
+    const used = await safeSend({ type: "useReply", me: myHandle() });
+    if (used && used.error === "LIMIT") {
+      const plan = await safeSend({ type: "plan", me: myHandle() });
+      setList(paywallHtml(plan));
+      if (panel) wirePaywall(panel);
+      return;
+    }
     closePanel();
     const { autoPost } = await chrome.storage.local.get("autoPost").catch(() => ({}));
     if (autoPost && info.statusId) return enqueue({ statusId: info.statusId, text, post: info.post });

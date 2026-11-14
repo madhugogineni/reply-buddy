@@ -12,7 +12,7 @@ It never posts anything on its own: every reply is one you picked. That's delibe
 - **2 to 4 reply ideas** per post, each from a different angle, plus an optional nudge ("agree", "joke", "ask why")
 - **Learns your voice** by reading your own Replies tab and working out your style: length, slang, punctuation, emojis, languages
 - **Keeps learning**: every reply you post through it is saved (including your edits) and used as an example
-- **Bring your own key**: works with Claude (Anthropic), OpenAI or Google Gemini
+- **Bring your own key, any provider**: Claude (Anthropic), OpenAI, Google Gemini, OpenRouter (hundreds of models), DeepSeek, Groq, Mistral, xAI (Grok), or any OpenAI-compatible API including local Ollama. Pick from the provider's model list or type any model ID
 - **Private**: your key and voice are stored only in your browser, and requests go straight to the provider you pick
 
 ## Install
@@ -37,9 +37,23 @@ Until it's on the Chrome Web Store:
 
 You can edit your rules and examples, switch providers, or export and import your voice at any time from the extension's settings (click its toolbar icon).
 
+## Plans
+
+- **Free**: 30 replies a day (a reply counts when you pick an idea). Resets at midnight.
+- **Unlimited**: $1/month through ExtensionPay (Stripe). You still use your own API key.
+
 ## Cost
 
 Each ⚡ click is one small API call, usually well under a cent on the small models (Claude Haiku, GPT mini models, Gemini Flash). Learning your voice is one larger call. Check your provider's usage page.
+
+## For the maintainer: payments setup
+
+1. Sign up at https://extensionpay.com, connect Stripe and register the extension. Use the ID in `config.js` (`reply-buddy`), or change `extpayId` to match what you registered.
+2. Add a monthly plan at your price (for example $1/month). The button text comes from `priceLabel` in `config.js`.
+3. Keep test mode on while trying it with Stripe's test cards, then switch to live.
+4. Owners in `ownerHandles` (in `config.js`) always get unlimited use, checked against the X account they're logged into.
+
+The free-tier counter is stored in the browser, and the owner check runs on the user's machine, so a determined user could bypass them. Paid status itself is verified with ExtensionPay.
 
 ## Files
 
@@ -51,6 +65,8 @@ Each ⚡ click is one small API call, usually well under a cent on the small mod
 | `welcome.html` / `welcome.js` | First-run setup |
 | `options.html` / `options.js` | Settings |
 | `common.js`, `ui.css`, `defaults.js` | Shared helpers, styles and neutral defaults |
+| `config.js` | ExtensionPay ID, free daily limit, price label, owner handles |
+| `ExtPay.js` | ExtensionPay library (LGPL-3.0, see `THIRD_PARTY_NOTICES.md`) |
 
 ## When X changes its layout
 
@@ -60,4 +76,4 @@ After changing any file, click the reload icon on the extension in `chrome://ext
 
 ## License
 
-MIT
+MIT for Reply Buddy's own code. `ExtPay.js` is LGPL-3.0; see `THIRD_PARTY_NOTICES.md`.

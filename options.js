@@ -30,9 +30,36 @@ async function save() {
   flash("Saved");
 }
 
+async function loadPlan(force) {
+  const p = await send({ type: "plan", force });
+  if (p.error) {
+    $("planText").textContent = "Couldn't check your plan right now.";
+    return;
+  }
+  const show = (id, on) => $(id).classList.toggle("hidden", !on);
+  if (p.tier === "owner") {
+    $("planText").innerHTML = `<b>Owner</b>: unlimited, free. Signed in on X as @${p.handle}.`;
+    show("upgrade", false); show("manage", false); show("login", false);
+  } else if (p.tier === "pro") {
+    $("planText").innerHTML = `<b>Pro</b>: unlimited replies. Thanks for supporting Reply Buddy!`;
+    show("upgrade", false); show("manage", true); show("login", false);
+  } else {
+    $("planText").innerHTML = `<b>Free</b>: ${p.left} of ${p.limit} replies left today (resets at midnight). Unlimited is ${p.price}; you still use your own API key.`;
+    show("upgrade", true); show("manage", false); show("login", true);
+  }
+}
+
 (async () => {
   await loadConnection();
   await loadVoice();
+  loadPlan(false);
+  $("upgrade").onclick = () => send({ type: "openPayment" });
+  $("manage").onclick = () => send({ type: "openPayment" });
+  $("login").onclick = () => send({ type: "openLogin" });
+  $("recheck").onclick = () => loadPlan(true);
+  chrome.storage.onChanged.addListener((c) => {
+    if (c.rbPaid || c.rbUsage) loadPlan(false);
+  });
 
   $("test").onclick = () => testKey($("s1"));
   $("save").onclick = save;

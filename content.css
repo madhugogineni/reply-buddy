@@ -101,3 +101,9 @@
 .rb-pill button { background: rgba(255, 255, 255, 0.18); color: #fff; border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
 .rb-pill button:hover { background: rgba(255, 255, 255, 0.3); }
 .rb-pill .rb-clear { padding: 6px 10px; }
+
+.rb-pay { display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+.rb-pay span { font-size: 13px; opacity: 0.8; }
+.rb-pay .rb-upgrade { margin-top: 4px; background: #e0283c; color: #fff; border: 0; border-radius: 999px; padding: 9px 14px; font: inherit; font-weight: 700; cursor: pointer; }
+.rb-pay .rb-upgrade:hover { background: #ff3b4f; }
+.rb-pay .rb-login { font-size: 12px; color: #1d9bf0; text-align: center; }

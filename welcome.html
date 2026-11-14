@@ -11,15 +11,20 @@
 
   <div class="card" id="c1">
     <h2><span class="step">1</span>Connect an AI model</h2>
-    <p class="hint">Use your own API key. It's stored only in this browser and sent only to the provider you pick. You pay the provider directly for what you use.</p>
+    <p class="hint">Works with Claude, OpenAI, Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI, or any OpenAI-compatible API. Use your own API key. It's stored only in this browser and sent only to the provider you pick. You pay the provider directly for what you use.</p>
     <label>Provider</label>
     <select id="provider"></select>
+    <div id="baseUrlBox" class="hidden">
+      <label>Base URL <span class="hint">any OpenAI-compatible API, e.g. Together, Fireworks, Perplexity, or Ollama at http://localhost:11434/v1</span></label>
+      <input id="baseUrl" placeholder="https://api.example.com/v1" />
+    </div>
     <label>API key <a id="keyLink" class="hint" target="_blank" rel="noopener"></a></label>
     <input id="apiKey" type="password" autocomplete="off" />
     <div class="bar"><button id="test">Test key</button><span id="s1"></span></div>
     <div id="modelBox" class="hidden">
-      <label>Model <span class="hint">a cheap, fast one is picked for you; replies are short</span></label>
-      <select id="model"></select>
+      <label>Model <span class="hint">a cheap, fast one is picked for you; replies are short</span> <span id="modelCount" class="hint"></span></label>
+      <input id="model" list="modelList" autocomplete="off" />
+      <datalist id="modelList"></datalist>
       <div class="bar"><button id="save1">Save and continue</button></div>
     </div>
   </div>
@@ -42,9 +47,11 @@
   <div class="card" id="c3">
     <h2><span class="step">3</span>Use it</h2>
     <p>Open your <a href="https://x.com/home" target="_blank" rel="noopener">X feed</a>. Every post now has a ⚡ next to like and repost. Click it, pick an idea, edit it if you want, then press Reply.</p>
+    <p class="hint" id="freeNote"></p>
     <p class="hint">Every time you post a suggestion, it saves the final text and learns from it. You can change everything later in the extension's settings.</p>
   </div>
 
+  <script src="config.js"></script>
   <script src="defaults.js"></script>
   <script src="providers.js"></script>
   <script src="common.js"></script>

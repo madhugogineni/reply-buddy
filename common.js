@@ -9,45 +9,58 @@ function fillProviders(select) {
 }
 
 function updateKeyHelp() {
-  const p = RB_PROVIDERS[$("provider").value];
+  const id = $("provider").value;
+  const p = RB_PROVIDERS[id];
   $("apiKey").placeholder = p.keyHint;
-  $("keyLink").href = p.keyUrl;
-  $("keyLink").textContent = "Get a " + p.label.split(" (")[0] + " key";
+  $("keyLink").href = p.keyUrl || "#";
+  $("keyLink").textContent = p.keyUrl ? "Get a " + p.label.split(" (")[0] + " key" : "";
+  $("baseUrlBox").classList.toggle("hidden", id !== "custom");
 }
 
+// The model box is a text field with suggestions, so any model ID can be typed in.
 function setModels(models, selected) {
-  const sel = $("model");
-  sel.innerHTML = models.map((m) => `<option value="${m}">${m}</option>`).join("");
-  if (selected && models.includes(selected)) sel.value = selected;
-  sel.disabled = !models.length;
+  $("modelList").innerHTML = models.map((m) => `<option value="${m}"></option>`).join("");
+  if (selected) $("model").value = selected;
+  $("modelCount").textContent = models.length ? `${models.length} available, or type any model ID` : "";
+}
+
+// Custom URLs need a one-time browser permission for that site.
+async function ensureHostPermission(url) {
+  try {
+    const origin = new URL(url).origin + "/*";
+    if (await chrome.permissions.contains({ origins: [origin] })) return true;
+    return await chrome.permissions.request({ origins: [origin] });
+  } catch {
+    return false;
+  }
 }
 
 // Tests the key by listing the models it can use. Returns true on success.
 async function testKey(statusEl) {
   const provider = $("provider").value;
   const key = $("apiKey").value.trim();
-  if (!key) {
+  const baseUrl = ($("baseUrl").value || "").trim();
+  const fail = (m) => {
     statusEl.className = "err";
-    statusEl.textContent = "Paste a key first.";
+    statusEl.textContent = m;
     return false;
+  };
+  if (!key && provider !== "custom") return fail("Paste a key first.");
+  if (provider === "custom") {
+    if (!/^https?:\/\//.test(baseUrl)) return fail("Enter the base URL, e.g. http://localhost:11434/v1");
+    if (!(await ensureHostPermission(baseUrl))) return fail("Reply Buddy needs permission to reach that URL.");
   }
   statusEl.className = "";
   statusEl.textContent = "Checking…";
-  const res = await send({ type: "listModels", provider, key });
-  if (res.error) {
-    statusEl.className = "err";
-    statusEl.textContent = res.error;
-    return false;
-  }
-  if (!res.models.length) {
-    statusEl.className = "err";
-    statusEl.textContent = "The key works, but no chat models are available on it.";
-    return false;
-  }
-  const { model: saved, provider: savedProvider } = await chrome.storage.local.get(["model", "provider"]);
-  setModels(res.models, savedProvider === provider && res.models.includes(saved) ? saved : res.pick);
+  const res = await send({ type: "listModels", provider, key, baseUrl });
+  if (res.error) return fail(res.error);
+  if (!res.models.length) return fail("The key works, but no chat models came back. Type a model ID instead.");
+  const saved = await chrome.storage.local.get(["model", "provider"]);
+  const current = $("model").value.trim();
+  const keep = current && saved.provider === provider ? current : "";
+  setModels(res.models, keep || res.pick);
   statusEl.className = "ok";
-  statusEl.textContent = `Key works. ${res.models.length} models available.`;
+  statusEl.textContent = `Key works. Picked ${keep || res.pick}; change it below if you like.`;
   return true;
 }
 
@@ -55,20 +68,23 @@ async function saveConnection() {
   await chrome.storage.local.set({
     provider: $("provider").value,
     apiKey: $("apiKey").value.trim(),
-    model: $("model").value
+    baseUrl: ($("baseUrl").value || "").trim(),
+    model: $("model").value.trim()
   });
 }
 
 async function loadConnection() {
-  const s = await chrome.storage.local.get(["provider", "apiKey", "model"]);
+  const s = await chrome.storage.local.get(["provider", "apiKey", "model", "baseUrl"]);
   fillProviders($("provider"));
-  $("provider").value = s.provider || RB_DEFAULTS.provider;
+  $("provider").value = RB_PROVIDERS[s.provider] ? s.provider : RB_DEFAULTS.provider;
   $("apiKey").value = s.apiKey || "";
+  $("baseUrl").value = s.baseUrl || "";
   updateKeyHelp();
-  setModels(s.model ? [s.model] : [], s.model);
+  setModels([], s.model || "");
   $("provider").onchange = () => {
     updateKeyHelp();
     setModels([], "");
+    $("model").value = "";
     $("apiKey").value = "";
   };
 }
