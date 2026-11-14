@@ -271,6 +271,36 @@
     return box.isContentEditable ? box : box.querySelector('[contenteditable="true"]') || box;
   }
 
+  // Types the reply into X's editor exactly once.
+  // X's editor can take a moment to show inserted text, so wait for it before
+  // trying the paste fallback, and clean up if both landed.
+  const norm = (t) => String(t || "").replace(/\s+/g, " ").trim();
+  async function fillComposer(editable, text) {
+    const want = norm(text);
+    const current = () => norm(editable.innerText);
+    const appeared = () => waitFor(() => (current().includes(want) ? true : null), 800);
+
+    editable.focus();
+    try {
+      document.execCommand("insertText", false, text);
+    } catch {}
+    if (!(await appeared()) && !current()) {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", text);
+      editable.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+      await appeared();
+    }
+    // If it ended up in there twice (or with leftovers), replace everything with one copy.
+    if (current() !== want) {
+      editable.focus();
+      try {
+        document.execCommand("selectAll", false);
+        document.execCommand("insertText", false, text);
+      } catch {}
+      await appeared();
+    }
+  }
+
   async function insertReply(ref, text) {
     const { article, info } = ref;
     const used = await safeSend({ type: "useReply", me: myHandle() });
@@ -293,17 +323,7 @@
     });
     if (!editable) return fallbackCopy(text);
 
-    editable.focus();
-    let ok = false;
-    try {
-      ok = document.execCommand("insertText", false, text);
-    } catch {}
-    await new Promise((r) => setTimeout(r, 60));
-    if (!ok || !editable.innerText.trim()) {
-      const dt = new DataTransfer();
-      dt.setData("text/plain", text);
-      editable.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-    }
+    await fillComposer(editable, text);
     pending = { post: info.post, at: Date.now() };
   }
 
@@ -412,17 +432,7 @@
   async function runJob(text) {
     const editable = await waitFor(() => findEditable(document), 20000);
     if (!editable) return safeSend({ type: "jobDone", ok: false, error: "reply box didn't load" });
-    editable.focus();
-    let ok = false;
-    try {
-      ok = document.execCommand("insertText", false, text);
-    } catch {}
-    await new Promise((r) => setTimeout(r, 150));
-    if (!ok || !editable.innerText.trim()) {
-      const dt = new DataTransfer();
-      dt.setData("text/plain", text);
-      editable.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
-    }
+    await fillComposer(editable, text);
     const btn = await waitFor(() => {
       const b = document.querySelector('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
       return b && b.getAttribute("aria-disabled") !== "true" && !b.disabled ? b : null;
