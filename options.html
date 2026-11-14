@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Reply Buddy settings</title>
+<link rel="stylesheet" href="ui.css" />
+</head>
+<body>
+  <h1>Reply Buddy</h1>
+  <p class="sub">Short replies in your voice. Nothing gets posted unless you press Reply. <a href="welcome.html">Run setup again</a></p>
+
+  <div class="card">
+    <h2>AI model</h2>
+    <label>Provider</label>
+    <select id="provider"></select>
+    <label>API key <a id="keyLink" class="hint" target="_blank" rel="noopener"></a></label>
+    <input id="apiKey" type="password" autocomplete="off" />
+    <div class="bar"><button id="test" class="ghost">Test key and load models</button><span id="s1"></span></div>
+    <div class="row">
+      <div>
+        <label>Model</label>
+        <select id="model"></select>
+      </div>
+      <div>
+        <label>Options per post</label>
+        <select id="count"><option>2</option><option>3</option><option>4</option></select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Your voice</h2>
+    <label>About you <span class="hint">optional, one line, e.g. "Software engineer from Hyderabad who posts about AI and credit cards"</span></label>
+    <input id="about" />
+    <label>Voice rules <span class="hint">one per line</span></label>
+    <textarea id="rules"></textarea>
+    <label>Replies you've written <span class="hint">one per line</span></label>
+    <textarea id="samples"></textarea>
+    <p class="hint">Post → reply examples: <b id="pairsCount">0</b>. Learned from replies you posted with Reply Buddy: <b id="learnedCount">0</b> (last 30 are used).</p>
+    <div class="bar">
+      <button id="relearn" class="ghost">Learn my voice again</button>
+      <button id="export" class="ghost">Export voice</button>
+      <button id="importBtn" class="ghost">Import voice</button>
+      <input id="importFile" type="file" accept=".json,application/json" class="hidden" />
+      <button id="clear" class="ghost">Clear learned replies</button>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button id="save">Save</button>
+    <button id="tryIt" class="ghost">Try on a sample post</button>
+    <span id="status"></span>
+  </div>
+  <pre id="out" class="out hidden"></pre>
+
+  <script src="defaults.js"></script>
+  <script src="providers.js"></script>
+  <script src="common.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

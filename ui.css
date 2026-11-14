@@ -1,0 +1,20 @@
+body { font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif; max-width: 680px; margin: 32px auto; padding: 0 20px 60px; color: #0f1419; }
+h1 { font-size: 24px; margin: 0 0 4px; }
+h2 { font-size: 17px; margin: 0 0 6px; }
+.sub { color: #536471; margin-top: 0; }
+label { display: block; font-weight: 600; margin: 18px 0 6px; }
+.hint { color: #536471; font-weight: 400; font-size: 13px; }
+input, select, textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid #cfd9de; border-radius: 8px; font: inherit; background: #fff; }
+textarea { min-height: 140px; resize: vertical; }
+.row { display: flex; gap: 12px; } .row > div { flex: 1; }
+button { background: #1d9bf0; color: #fff; border: 0; border-radius: 999px; padding: 9px 18px; font: inherit; font-weight: 600; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+button.ghost { background: transparent; color: #1d9bf0; border: 1px solid #cfd9de; }
+.bar { display: flex; gap: 10px; align-items: center; margin-top: 18px; flex-wrap: wrap; }
+.ok { color: #00ba7c; } .err { color: #f4212e; }
+.card { border: 1px solid #eff3f4; border-radius: 14px; padding: 18px 20px; margin-top: 18px; }
+.card.done { border-color: #00ba7c; }
+.step { display: inline-block; background: #1d9bf0; color: #fff; border-radius: 999px; width: 22px; height: 22px; text-align: center; line-height: 22px; font-size: 12px; margin-right: 6px; }
+a { color: #1d9bf0; }
+pre.out { white-space: pre-wrap; background: #f7f9f9; border-radius: 8px; padding: 10px; margin: 10px 0 0; font: inherit; }
+.hidden { display: none; }

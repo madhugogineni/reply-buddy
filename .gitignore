@@ -1,0 +1,5 @@
+# Personal voice files and keys never go in the repo
+*-voice.json
+.env
+*.zip
+.DS_Store
