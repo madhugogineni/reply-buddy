@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Reply Buddy for X",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "description": "Suggests short, human replies in your own voice on x.com. You pick one and post it yourself.",
   "permissions": [
     "storage"
@@ -53,6 +53,17 @@
   ],
   "options_page": "options.html",
   "action": {
-    "default_title": "Reply Buddy settings"
-  }
+    "default_title": "Reply Buddy settings",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "homepage_url": "https://github.com/madhugogineni/reply-buddy"
 }

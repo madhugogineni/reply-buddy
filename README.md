@@ -66,7 +66,11 @@ The free-tier counter is stored in the browser, and the owner check runs on the 
 | `welcome.html` / `welcome.js` | First-run setup |
 | `options.html` / `options.js` | Settings |
 | `common.js`, `ui.css`, `defaults.js` | Shared helpers, styles and neutral defaults |
-| `config.js` | ExtensionPay ID, free daily limit, price label, owner handles |
+| `config.js` | ExtensionPay ID, free daily limit, price label, owner handles, paywall switch |
+| `icons/` | Extension icons |
+| `store/` | Chrome Web Store listing text, screenshots and promo tile |
+| `scripts/build_store.py` | Builds the store zip into `dist/` |
+| `PRIVACY.md` | Privacy policy |
 | `ExtPay.js` | ExtensionPay library (LGPL-3.0, see `THIRD_PARTY_NOTICES.md`) |
 
 ## When X changes its layout
