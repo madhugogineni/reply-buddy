@@ -4,8 +4,9 @@ const RB_CONFIG = {
   extpayId: "reply-buddy",
   // Replies a free user can use per day (counted when they pick an idea).
   freeDailyReplies: 30,
-  // Shown on the upgrade button. The real price is set in your ExtensionPay dashboard.
-  priceLabel: "$1/month",
+  // Shown in the upgrade text. The real prices are the plans in your ExtensionPay dashboard:
+  // a $1 monthly subscription and a $15 one-time payment.
+  priceLabel: "$1/month or $15 once",
   // X handles that always get unlimited use, lowercase, no @.
   ownerHandles: ["madhugogineni97"]
 };

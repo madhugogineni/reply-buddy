@@ -40,7 +40,7 @@ You can edit your rules and examples, switch providers, or export and import you
 ## Plans
 
 - **Free**: 30 replies a day (a reply counts when you pick an idea). Resets at midnight.
-- **Unlimited**: $1/month through ExtensionPay (Stripe). You still use your own API key.
+- **Unlimited**: $1/month, or $15 once for lifetime access, through ExtensionPay (Stripe). You still use your own API key.
 
 ## Cost
 
@@ -49,7 +49,7 @@ Each ⚡ click is one small API call, usually well under a cent on the small mod
 ## For the maintainer: payments setup
 
 1. Sign up at https://extensionpay.com, connect Stripe and register the extension. Use the ID in `config.js` (`reply-buddy`), or change `extpayId` to match what you registered.
-2. Add a monthly plan at your price (for example $1/month). The button text comes from `priceLabel` in `config.js`.
+2. Add two plans: a $1 monthly subscription and a $15 one-time payment. Users pick one on the payment page, and either unlocks unlimited use. The text comes from `priceLabel` in `config.js`.
 3. Keep test mode on while trying it with Stripe's test cards, then switch to live.
 4. Owners in `ownerHandles` (in `config.js`) always get unlimited use, checked against the X account they're logged into.
 
