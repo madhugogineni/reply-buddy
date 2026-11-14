@@ -48,6 +48,17 @@
 
   <div class="card">
     <h2>Your voice</h2>
+    <div id="dropZone" class="drop">
+      <div>
+        <b>Upload a voice file</b>
+        <span class="hint" id="voiceName">Drop a .json voice file here, or choose one. It replaces your rules and examples. "Download my voice" saves a backup, including what it learned from your posts.</span>
+      </div>
+      <div class="bar" style="margin:0">
+        <button id="importBtn">Upload voice file</button>
+        <button id="export" class="ghost">Download my voice</button>
+      </div>
+      <input id="importFile" type="file" accept=".json,application/json" class="hidden" />
+    </div>
     <label>About you <span class="hint">optional, one line, e.g. "Software engineer from Hyderabad who posts about AI and credit cards"</span></label>
     <input id="about" />
     <label>Voice rules <span class="hint">one per line</span></label>
@@ -57,9 +68,6 @@
     <p class="hint">Post → reply examples: <b id="pairsCount">0</b>. Learned from replies you posted with Reply Buddy: <b id="learnedCount">0</b> (last 30 are used).</p>
     <div class="bar">
       <button id="relearn" class="ghost">Learn my voice again</button>
-      <button id="export" class="ghost">Export voice</button>
-      <button id="importBtn" class="ghost">Import voice</button>
-      <input id="importFile" type="file" accept=".json,application/json" class="hidden" />
       <button id="clear" class="ghost">Clear learned replies</button>
     </div>
   </div>

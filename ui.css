@@ -18,3 +18,6 @@ button.ghost { background: transparent; color: #1d9bf0; border: 1px solid #cfd9d
 a { color: #1d9bf0; }
 pre.out { white-space: pre-wrap; background: #f7f9f9; border-radius: 8px; padding: 10px; margin: 10px 0 0; font: inherit; }
 .hidden { display: none; }
+.drop { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; border: 1.5px dashed #cfd9de; border-radius: 12px; padding: 14px 16px; margin: 10px 0 4px; transition: border-color 0.15s, background 0.15s; }
+.drop b { display: block; }
+.drop.over { border-color: #1d9bf0; background: rgba(29, 155, 240, 0.06); }

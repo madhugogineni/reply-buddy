@@ -90,7 +90,7 @@ async function loadConnection() {
 }
 
 async function exportVoice() {
-  const s = await chrome.storage.local.get(["about", "rules", "samples", "pairs", "voiceHandle"]);
+  const s = await chrome.storage.local.get(["about", "rules", "samples", "pairs", "voiceHandle", "learned"]);
   const voice = {
     format: "reply-buddy-voice",
     version: 1,
@@ -98,7 +98,9 @@ async function exportVoice() {
     about: s.about || "",
     rules: s.rules || "",
     samples: s.samples || "",
-    pairs: s.pairs || []
+    pairs: s.pairs || [],
+    // Replies posted through Reply Buddy, after your edits. Never includes your API key.
+    learned: s.learned || []
   };
   const blob = new Blob([JSON.stringify(voice, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
@@ -119,8 +121,19 @@ function importVoice(file) {
           rules: v.rules || RB_DEFAULTS.rules,
           samples: v.samples || "",
           pairs: Array.isArray(v.pairs) ? v.pairs.slice(0, 60) : [],
-          voiceHandle: (v.name || "").replace(/^@/, "").replace(/\s.*$/, "")
+          // "Madhu (@madhugogineni97)" or "@madhugogineni97" -> madhugogineni97
+          voiceHandle: ((v.name || "").match(/@([A-Za-z0-9_]+)/) || [])[1] || ""
         });
+        // Merge learned replies from the file with any already here, newest last.
+        if (Array.isArray(v.learned) && v.learned.length) {
+          const { learned = [] } = await chrome.storage.local.get("learned");
+          const seen = new Set();
+          const merged = [...v.learned, ...learned]
+            .filter((l) => l && l.reply && !seen.has(l.reply) && seen.add(l.reply))
+            .sort((a, b) => (a.at || 0) - (b.at || 0))
+            .slice(-80);
+          await chrome.storage.local.set({ learned: merged });
+        }
         resolve(v);
       } catch (e) {
         reject(e);

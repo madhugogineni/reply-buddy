@@ -5,7 +5,7 @@ function flash(msg, cls = "ok") {
 }
 
 async function loadVoice() {
-  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned", "readImages", "autoPost"]);
+  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned", "readImages", "autoPost", "voiceHandle", "voiceFileName"]);
   $("count").value = String(s.count || RB_DEFAULTS.count);
   $("readImages").checked = s.readImages !== false;
   $("autoPost").checked = !!s.autoPost;
@@ -13,6 +13,10 @@ async function loadVoice() {
   $("rules").value = s.rules || RB_DEFAULTS.rules;
   $("samples").value = s.samples || "";
   $("pairsCount").textContent = (s.pairs || []).length;
+  const rules = (s.rules || "").split("\n").filter(Boolean).length;
+  const who = s.voiceHandle ? "@" + s.voiceHandle : s.voiceFileName || "";
+  if (who || (s.pairs || []).length)
+    $("voiceName").textContent = `Current voice${who ? ": " + who : ""} (${rules} rules, ${(s.pairs || []).length} examples). Drop a new file to replace it.`;
   $("learnedCount").textContent = (s.learned || []).length;
 }
 
@@ -91,20 +95,34 @@ async function loadPlan(force) {
   };
 
   $("export").onclick = exportVoice;
-  $("importBtn").onclick = () => $("importFile").click();
-  $("importFile").onchange = async (e) => {
-    const f = e.target.files[0];
+  const uploadVoice = async (f) => {
     if (!f) return;
     try {
       const v = await importVoice(f);
-      await chrome.storage.local.set({ voiceLearnedAt: Date.now() });
+      await chrome.storage.local.set({ voiceLearnedAt: Date.now(), voiceFileName: f.name });
       await loadVoice();
-      flash(`Imported ${v.name || "voice"}`);
+      flash(`Loaded ${v.name || f.name}`);
     } catch (err) {
       flash(err.message, "err");
     }
+  };
+  $("importBtn").onclick = () => $("importFile").click();
+  $("importFile").onchange = async (e) => {
+    await uploadVoice(e.target.files[0]);
     e.target.value = "";
   };
+  const dz = $("dropZone");
+  ["dragenter", "dragover"].forEach((t) =>
+    dz.addEventListener(t, (e) => {
+      e.preventDefault();
+      dz.classList.add("over");
+    })
+  );
+  ["dragleave", "drop"].forEach((t) => dz.addEventListener(t, () => dz.classList.remove("over")));
+  dz.addEventListener("drop", (e) => {
+    e.preventDefault();
+    uploadVoice(e.dataTransfer.files[0]);
+  });
 
   $("clear").onclick = async () => {
     await chrome.storage.local.set({ learned: [] });
