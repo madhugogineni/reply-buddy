@@ -28,7 +28,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 });
 
 async function getSettings() {
-  const s = await chrome.storage.local.get(["apiKey", "provider", "model", "count", "about", "rules", "samples", "pairs", "learned"]);
+  const s = await chrome.storage.local.get(["apiKey", "provider", "model", "count", "about", "rules", "samples", "pairs", "learned", "readImages"]);
   return {
     apiKey: (s.apiKey || "").trim(),
     provider: s.provider || RB_DEFAULTS.provider,
@@ -38,7 +38,8 @@ async function getSettings() {
     rules: s.rules || RB_DEFAULTS.rules,
     samples: s.samples || "",
     pairs: s.pairs || [],
-    learned: s.learned || []
+    learned: s.learned || [],
+    readImages: s.readImages !== false
   };
 }
 
@@ -57,7 +58,9 @@ Always:
 - No em dashes or en dashes. No lists. No hashtags. No polished or formal wording.
 - Give each option a different angle, e.g. a one-word reaction, a quick opinion, a tiny joke, a short question back. At least one option should be very short.
 - Never invent facts, numbers or personal experiences. Only mention their own experience if it's generic or appears in their examples.
-- Set skip to true when there's nothing natural to add: ads, politics, outrage bait, very sad news, or posts you can't understand.
+- Always write reply options. Every post can get a reply.
+- Launches, product drops, "I built this", promos, giveaways, milestones and self-promotion are GOOD posts to reply to: congratulate them, hype them up, or ask one short genuine question about the product (how long it took, what's next, does it do X). Never call these ads or skip them.
+- Only set skip to true for party politics, tragedies or deaths, hate or harassment, and obvious scams or crypto spam. Even then, still write the options and put a short reason in "reason".
 
 Their rules for their voice:
 ${s.rules || "(none)"}`;
@@ -77,13 +80,18 @@ ${s.rules || "(none)"}`;
   return sys;
 }
 
-function buildUser({ post, thread, author, quoted, images, steer, toMe }, count) {
+function buildUser({ post, thread, author, quoted, images, cardText, steer, toMe }, count, attached = []) {
   let u = "";
   if (toMe) u += `This person is replying to one of the user's own posts.\n\n`;
   if (thread && thread.length) u += `Earlier in the thread:\n${thread.map((t) => `- ${t}`).join("\n")}\n\n`;
   u += `Post by ${author || "someone"}:\n${post || "(no text)"}`;
   if (quoted) u += `\n\nIt quotes this post:\n${quoted}`;
-  if (images && images.length) u += `\n\nIt has image(s). Alt text: ${images.join(" | ")}`;
+  if (cardText) u += `\n\nLink preview in the post: ${cardText}`;
+  if (attached.length) {
+    u += `\n\nAttached: ${attached.map((a) => a.kind).join(", ")} from the post. Look at them closely and read any text in them. They are often the main point of the post, so react to what they show.`;
+  } else if (images && images.length) {
+    u += `\n\nIt has image(s). Alt text: ${images.join(" | ")}`;
+  }
   if (steer) u += `\n\nDirection from the user for this reply: ${steer}`;
   u += `\n\nWrite ${count} reply options.`;
   return u;
@@ -98,32 +106,98 @@ function cleanReply(r) {
 }
 
 function parseJson(text) {
-  const m = String(text).match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("Couldn't read the model's answer. Try again.");
-  try {
-    return JSON.parse(m[0]);
-  } catch {
-    throw new Error("Couldn't read the model's answer. Try again.");
+  const raw = String(text || "").replace(/```(?:json)?/gi, "").trim();
+  const m = raw.match(/\{[\s\S]*\}/);
+  if (m) {
+    try {
+      return JSON.parse(m[0]);
+    } catch {}
   }
+  // Fallback: pull a replies array out even if the JSON around it is broken.
+  const arr = raw.match(/"replies"\s*:\s*(\[[\s\S]*?\])/);
+  if (arr) {
+    try {
+      return { replies: JSON.parse(arr[1]) };
+    } catch {}
+  }
+  return null;
+}
+
+// Last resort when a model ignores the JSON format: treat short lines as replies.
+function linesAsReplies(text) {
+  return String(text || "")
+    .split("\n")
+    .map((l) => l.replace(/^\s*(?:[-*\u2022]|\d+[.)])\s*/, "").trim())
+    .filter((l) => l && l.length <= 200 && !/^(here|sure|option|reply)\b.*:$/i.test(l) && !/[{}\[\]]/.test(l))
+    .slice(0, 4);
+}
+
+function toBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+// Fetch post images from X's image CDN at a small size, as base64.
+async function loadImages(media) {
+  const out = [];
+  for (const m of (media || []).slice(0, 4)) {
+    try {
+      let url = String(m.url || "");
+      if (!/^https:\/\/pbs\.twimg\.com\//.test(url)) continue;
+      url = /[?&]name=/.test(url) ? url.replace(/([?&])name=[^&]+/, "$1name=small") : url + (url.includes("?") ? "&" : "?") + "name=small";
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const mime = (res.headers.get("content-type") || "image/jpeg").split(";")[0];
+      if (!/^image\/(jpeg|png|webp|gif)$/.test(mime)) continue;
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength > 3.5 * 1024 * 1024) continue;
+      out.push({ mime, data: toBase64(buf), kind: m.kind || "photo" });
+    } catch {}
+  }
+  return out;
 }
 
 async function suggest(msg) {
   const s = await getSettings();
   if (!s.apiKey) throw new Error("NO_KEY");
   if (!s.model) throw new Error("Pick a model in settings first.");
-  const text = await rbCallModel({
-    provider: s.provider,
-    key: s.apiKey,
-    model: s.model,
-    system: buildSystem(s),
-    user: buildUser(msg, s.count),
-    maxTokens: 400
-  });
+  const images = s.readImages ? await loadImages(msg.media) : [];
+  const call = (imgs) =>
+    rbCallModel({
+      provider: s.provider,
+      key: s.apiKey,
+      model: s.model,
+      system: buildSystem(s),
+      user: buildUser(msg, s.count, imgs),
+      images: imgs,
+      maxTokens: 500
+    });
+
+  let text;
+  let sawImages = images.length;
+  try {
+    text = await call(images);
+  } catch (e) {
+    // Some models can't take images. Retry once with text only.
+    if (!images.length || /key was rejected|Rate limited/.test(e.message)) throw e;
+    text = await call([]);
+    sawImages = 0;
+  }
+
   const out = parseJson(text);
+  let replies = out ? (out.replies || []).map(cleanReply).filter(Boolean) : [];
+  if (!out) replies = linesAsReplies(text).map(cleanReply).filter(Boolean);
+  if (!replies.length) {
+    console.warn("Reply Buddy: unreadable model output", text);
+    throw new Error("The model didn't send usable ideas. Hit refresh to try again.");
+  }
   return {
-    skip: !!out.skip,
-    reason: out.reason || "",
-    replies: (out.replies || []).map(cleanReply).filter(Boolean)
+    skip: !!(out && out.skip),
+    reason: (out && out.reason) || "",
+    replies,
+    sawImages
   };
 }
 
@@ -174,7 +248,7 @@ Also write one short line about who they seem to be, based only on what they cle
 
 Return JSON only: {"about": "...", "rules": ["...", "..."]}. Do not use em dashes.`
   });
-  const out = parseJson(text);
+  const out = parseJson(text) || {};
   const rules = (out.rules || []).map((r) => String(r).replace(/\s*[—–]\s*/g, ", ").trim()).filter(Boolean);
   if (!rules.length) throw new Error("The model didn't return any style rules. Try again.");
 

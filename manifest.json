@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "Reply Buddy for X",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Suggests short, human replies in your own voice on x.com. You pick one and post it yourself.",
   "permissions": ["storage"],
   "host_permissions": [
     "https://api.anthropic.com/*",
     "https://api.openai.com/*",
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://pbs.twimg.com/*"
   ],
   "background": { "service_worker": "background.js" },
   "content_scripts": [

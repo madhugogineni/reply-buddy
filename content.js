@@ -18,6 +18,14 @@
     const images = [...article.querySelectorAll('[data-testid="tweetPhoto"] img')]
       .map((i) => i.alt)
       .filter((a) => a && a !== "Image");
+    // Photos, video thumbnails and link-card images, so the model can see them.
+    const media = [];
+    article.querySelectorAll('[data-testid="tweetPhoto"] img').forEach((img) => media.push({ url: img.src, kind: "photo" }));
+    article.querySelectorAll("video[poster]").forEach((v) => media.push({ url: v.poster, kind: "video thumbnail" }));
+    const card = article.querySelector('[data-testid="card.wrapper"]');
+    const cardImg = card?.querySelector("img");
+    if (cardImg) media.push({ url: cardImg.src, kind: "link preview" });
+    const cardText = card ? textOf(card).replace(/\s+/g, " ").slice(0, 200) : "";
     const me = (document.querySelector('[data-testid="AppTabBar_Profile_Link"]')?.getAttribute("href") || "")
       .replace("/", "")
       .toLowerCase();
@@ -26,7 +34,9 @@
       [...article.querySelectorAll("a[href]")].some(
         (a) => a.getAttribute("href").toLowerCase() === "/" + me && !a.closest('[data-testid="User-Name"], [data-testid="Tweet-User-Avatar"]')
       );
-    return { post, quoted, author, images, toMe };
+    const seen = new Set();
+    const uniqueMedia = media.filter((m) => m.url && !seen.has(m.url) && seen.add(m.url)).slice(0, 4);
+    return { post, quoted, author, images, media: uniqueMedia, cardText, toMe };
   }
 
   function readThread(article) {
@@ -110,7 +120,7 @@
       </div>
       <div class="rb-steer">
         <input type="text" placeholder="Optional nudge: agree, joke, ask a question…" />
-        <button class="rb-go" title="Regenerate">↻</button>
+        <button class="rb-go" type="button" title="New ideas" aria-label="New ideas"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
       <div class="rb-list"></div>
       <div class="rb-foot"><a href="#" class="rb-settings">Settings</a><span class="rb-meta"></span></div>`;
@@ -124,7 +134,11 @@
     };
     const input = panel.querySelector(".rb-steer input");
     const go = () => generate(input.value.trim());
-    panel.querySelector(".rb-go").onclick = go;
+    panel.querySelector(".rb-go").addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      go();
+    });
     input.addEventListener("keydown", (e) => {
       e.stopPropagation(); // keep X keyboard shortcuts out of the way
       if (e.key === "Enter") go();
@@ -155,11 +169,19 @@
   }
 
   async function generate(steer) {
-    if (!current) return;
+    if (!current || current.busy) return;
     const ref = current;
-    setList(`<div class="rb-loading"><span></span><span></span><span></span></div>`);
+    ref.busy = true;
+    const goBtn = panel.querySelector(".rb-go");
+    goBtn.classList.add("rb-spin");
+    goBtn.disabled = true;
+    const hasMedia = ref.info.media && ref.info.media.length;
+    setList(`<div class="rb-loading"><span></span><span></span><span></span></div>${hasMedia ? '<div class="rb-sub">Looking at the image…</div>' : ""}`);
     const res = await safeSend({ type: "suggest", ...ref.info, steer });
+    ref.busy = false;
     if (current !== ref || !panel) return;
+    goBtn.classList.remove("rb-spin");
+    goBtn.disabled = false;
 
     if (!res || res.error) {
       const err = res?.error || "Something went wrong.";
@@ -180,10 +202,12 @@
     const items = res.replies.map(
       (r, i) => `<button class="rb-opt" data-i="${i}">${esc(r)}<small>${r.length}</small></button>`
     );
-    let html = "";
-    if (res.skip) html += `<div class="rb-msg">Probably one to skip${res.reason ? ": " + esc(res.reason) : ""}.</div>`;
-    html += items.join("");
-    if (!items.length && !res.skip) html = `<div class="rb-msg">No ideas came back. Hit ↻.</div>`;
+    let html = items.join("");
+    if (res.skip) html += `<div class="rb-note">Heads up: ${esc(res.reason || "might be one to skip")}</div>`;
+    if (!items.length) html = `<div class="rb-msg">No ideas came back. Hit refresh.</div>`;
+    panel.querySelector(".rb-meta").textContent = res.sawImages
+      ? `👀 Saw ${res.sawImages} image${res.sawImages > 1 ? "s" : ""}`
+      : "";
     setList(html);
 
     panel.querySelectorAll(".rb-opt").forEach((b) => {

@@ -87,7 +87,8 @@ function rbPickModel(provider, models) {
   return models[0] || "";
 }
 
-async function rbCallModel({ provider, key, model, system, user, maxTokens = 600 }) {
+// images: [{ mime, data }] with base64 data. Sent inline to every provider.
+async function rbCallModel({ provider, key, model, system, user, images = [], maxTokens = 600 }) {
   if (provider === "anthropic") {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -97,7 +98,20 @@ async function rbCallModel({ provider, key, model, system, user, maxTokens = 600
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
-      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages: [{ role: "user", content: user }] })
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        system,
+        messages: [
+          {
+            role: "user",
+            content: [
+              ...images.map((i) => ({ type: "image", source: { type: "base64", media_type: i.mime, data: i.data } })),
+              { type: "text", text: user }
+            ]
+          }
+        ]
+      })
     });
     if (!res.ok) throw new Error(await rbReadError(res));
     const j = await res.json();
@@ -114,7 +128,15 @@ async function rbCallModel({ provider, key, model, system, user, maxTokens = 600
         max_completion_tokens: Math.max(maxTokens, 2000),
         messages: [
           { role: "system", content: system },
-          { role: "user", content: user }
+          {
+            role: "user",
+            content: images.length
+              ? [
+                  { type: "text", text: user },
+                  ...images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.mime};base64,${i.data}` } }))
+                ]
+              : user
+          }
         ]
       })
     });
@@ -131,7 +153,12 @@ async function rbCallModel({ provider, key, model, system, user, maxTokens = 600
         headers: { "content-type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: "user", parts: [{ text: user }] }],
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: user }, ...images.map((i) => ({ inlineData: { mimeType: i.mime, data: i.data } }))]
+            }
+          ],
           generationConfig: { maxOutputTokens: Math.max(maxTokens, 2000) }
         })
       }

@@ -5,8 +5,9 @@ function flash(msg, cls = "ok") {
 }
 
 async function loadVoice() {
-  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned"]);
+  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned", "readImages"]);
   $("count").value = String(s.count || RB_DEFAULTS.count);
+  $("readImages").checked = s.readImages !== false;
   $("about").value = s.about || "";
   $("rules").value = s.rules || RB_DEFAULTS.rules;
   $("samples").value = s.samples || "";
@@ -18,6 +19,7 @@ async function save() {
   await saveConnection();
   await chrome.storage.local.set({
     count: Number($("count").value),
+    readImages: $("readImages").checked,
     about: $("about").value.trim(),
     rules: $("rules").value,
     samples: $("samples").value,
