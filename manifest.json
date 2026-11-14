@@ -1,9 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Reply Buddy for X",
-  "version": "3.2.0",
+  "version": "3.3.0",
   "description": "Suggests short, human replies in your own voice on x.com. You pick one and post it yourself.",
-  "permissions": ["storage"],
+  "permissions": [
+    "storage"
+  ],
   "host_permissions": [
     "https://api.anthropic.com/*",
     "https://api.openai.com/*",
@@ -16,21 +18,41 @@
     "https://api.x.ai/*",
     "https://extensionpay.com/*"
   ],
-  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
-  "background": { "service_worker": "background.js" },
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["https://extensionpay.com/*"],
-      "js": ["ExtPay.js"],
+      "matches": [
+        "https://extensionpay.com/*"
+      ],
+      "js": [
+        "ExtPay.js"
+      ],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": [
+        "defaults.js",
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],
   "options_page": "options.html",
-  "action": { "default_title": "Reply Buddy settings" }
+  "action": {
+    "default_title": "Reply Buddy settings"
+  }
 }

@@ -61,10 +61,9 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
 // Queue jobs: tabId -> { text, finish }
 const jobs = new Map();
 
-function postReply({ statusId, text }) {
-  if (!/^\d+$/.test(String(statusId))) return Promise.resolve({ ok: false, error: "missing post id" });
+function openJob(url, job) {
   return new Promise((resolve) => {
-    chrome.tabs.create({ url: `https://x.com/intent/post?in_reply_to=${statusId}`, active: false }, (tab) => {
+    chrome.tabs.create({ url, active: false }, (tab) => {
       if (!tab) return resolve({ ok: false, error: "couldn't open a tab" });
       let settled = false;
       const finish = (r) => {
@@ -74,10 +73,20 @@ function postReply({ statusId, text }) {
         setTimeout(() => chrome.tabs.remove(tab.id).catch(() => {}), 1500);
         resolve(r);
       };
-      jobs.set(tab.id, { text, finish });
+      jobs.set(tab.id, { ...job, finish });
       setTimeout(() => finish({ ok: false, error: "timed out" }), 45000);
     });
   });
+}
+
+function postReply({ statusId, text }) {
+  if (!/^\d+$/.test(String(statusId))) return Promise.resolve({ ok: false, error: "missing post id" });
+  return openJob(`https://x.com/intent/post?in_reply_to=${statusId}`, { kind: "reply", text });
+}
+
+function followUser({ handle }) {
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(String(handle))) return Promise.resolve({ ok: false, error: "bad handle" });
+  return openJob(`https://x.com/intent/follow?screen_name=${handle}`, { kind: "follow", handle });
 }
 
 chrome.tabs.onRemoved.addListener((tabId) => jobs.get(tabId)?.finish({ ok: false, error: "tab was closed" }));
@@ -86,9 +95,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const tabId = sender.tab && sender.tab.id;
   const handlers = {
     postReply: () => postReply(msg),
-    myJob: async () => ({ text: jobs.get(tabId)?.text || "" }),
+    followUser: () => followUser(msg),
+    myJob: async () => {
+      const j = jobs.get(tabId);
+      return j ? { kind: j.kind, text: j.text || "", handle: j.handle || "" } : {};
+    },
     jobDone: async () => {
-      jobs.get(tabId)?.finish({ ok: !!msg.ok, error: msg.error || "" });
+      jobs.get(tabId)?.finish({ ok: !!msg.ok, error: msg.error || "", already: !!msg.already });
       return { ok: true };
     },
     suggest: () => suggest(msg),

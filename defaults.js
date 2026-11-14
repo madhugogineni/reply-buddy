@@ -18,3 +18,11 @@ const RB_DEFAULTS = {
   samples: "",
   pairs: []
 };
+
+// "Let's connect" replies, one per line. {name} is the person's first name ("man" if unclear).
+const RB_CONNECT_DEFAULT = [
+  "Hey {name}, let's connect :)",
+  "Hey {name}, followed you. Let's connect :)",
+  "Hey {name}! Let's connect 🤝",
+  "Done from my side, {name}. Let's connect :)"
+].join("\n");

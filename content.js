@@ -81,6 +81,86 @@
       .map((t) => t.slice(0, 280));
   }
 
+  // ---------- 🤝 Let's connect ----------
+  const CONNECT_RE =
+    /\b(let'?s|lets|let\u2019s)\s+connect\b|\bconnect\s+(with|and grow|& grow)\b|\b(want(ing)?|looking|love|happy|open)\s+to\s+connect\b|\bgrow\s+together\b|\bfollow\s*(back|4\s*follow|for\s*follow)\b|\bf4f\b|\bmutuals?\b.*\bconnect\b|\bconnect\b.*🤝/i;
+  const HANDSHAKE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 11.5l3.5-4 3 1.2 2.6-1.4a2 2 0 0 1 1.9 0l3.5 1.8 2.5-1.6 2 4.4-2.3 1.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 7.5l-3.5 4 2.4 2.2M8.4 16.2l1.7 1.5a1.3 1.3 0 0 0 1.8-1.9M11.9 15.8l1.4 1.3a1.3 1.3 0 0 0 1.8-1.9M15.1 15.2l.4.4a1.3 1.3 0 0 0 1.8-1.9l-4.2-4-2.1 1.2a1.6 1.6 0 0 1-2.2-.7 1.6 1.6 0 0 1 .6-2.1L13 7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M4.9 13.7l1.6 1.4a1.3 1.3 0 0 0 1.9-1.8l-.4-.4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+  const NOT_NAMES = new Set("the mr mrs ms dr pro official team ai dev hq app labs studio inc ceo founder".split(" "));
+  function firstName(display) {
+    const word = String(display || "")
+      .replace(/[^\p{L}\s'-]/gu, " ")
+      .trim()
+      .split(/\s+/)[0] || "";
+    if (word.length < 2 || word.length > 14 || NOT_NAMES.has(word.toLowerCase())) return "";
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }
+
+  function authorOf(article) {
+    const box = article.querySelector('[data-testid="User-Name"]');
+    const link = box && [...box.querySelectorAll('a[href^="/"]')].find((a) => /^\/[A-Za-z0-9_]{1,15}$/.test(a.getAttribute("href")));
+    const handle = link ? link.getAttribute("href").slice(1) : "";
+    const display = box ? (box.innerText.split("\n")[0] || "") : "";
+    return { handle, name: firstName(display) };
+  }
+
+  async function connectMessage(name) {
+    const { connectTemplates } = await chrome.storage.local.get("connectTemplates");
+    const lines = (connectTemplates || RB_CONNECT_DEFAULT).split("\n").map((l) => l.trim()).filter(Boolean);
+    const { lastConnect = "" } = await chrome.storage.local.get("lastConnect");
+    const pool = lines.length > 1 ? lines.filter((l) => l !== lastConnect) : lines;
+    const tpl = pool[Math.floor(Math.random() * pool.length)] || "Hey {name}, let's connect :)";
+    await chrome.storage.local.set({ lastConnect: tpl });
+    return tpl.replace(/\{name\}/g, name || "man");
+  }
+
+  async function doConnect(article) {
+    const info = readArticle(article);
+    const { handle, name } = authorOf(article);
+    const me = myHandle();
+    if (!handle || handle.toLowerCase() === me) return toast("That's your own post.");
+    const used = await safeSend({ type: "useReply", me });
+    if (used && used.error === "LIMIT") return toast("You've used today's free replies. Upgrade in settings for unlimited.");
+    const text = await connectMessage(name);
+    const { connectFollow = true, autoPost } = await chrome.storage.local.get(["connectFollow", "autoPost"]);
+    if (connectFollow) await enqueue({ kind: "follow", handle }, true);
+    if (autoPost && info.statusId) {
+      await enqueue({ kind: "reply", statusId: info.statusId, text, post: info.post }, true);
+      toast(connectFollow ? `Following @${handle} and replying…` : "Replying…");
+    } else {
+      closePanel();
+      const replyBtn = article.querySelector('[data-testid="reply"]');
+      if (!replyBtn) return fallbackCopy(text);
+      replyBtn.click();
+      const editable = await waitFor(() => {
+        const dlg = document.querySelector('[role="dialog"]');
+        return dlg && findEditable(dlg);
+      });
+      if (!editable) return fallbackCopy(text);
+      await fillComposer(editable, text);
+      if (connectFollow) toast(`Following @${handle}. Press Reply to send.`);
+    }
+  }
+
+  function addConnectButton(article, group) {
+    if (article.querySelector(".rb-connect")) return;
+    const text = textOf(article.querySelector('[data-testid="tweetText"]'));
+    if (!CONNECT_RE.test(text)) return;
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "rb-connect";
+    b.title = "Let's connect: follow and reply";
+    b.setAttribute("aria-label", "Let's connect");
+    b.innerHTML = HANDSHAKE_ICON;
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      b.disabled = true;
+      doConnect(article).finally(() => (b.disabled = false));
+    });
+    group.appendChild(b);
+  }
+
   // ---------- button on each post ----------
   function addButton(article) {
     const group = article.querySelector('[role="group"]');
@@ -98,6 +178,7 @@
       openPanel(article, btn);
     });
     group.appendChild(btn);
+    addConnectButton(article, group);
   }
 
   function scan() {
@@ -155,11 +236,17 @@
         <button class="rb-go" type="button" title="New ideas" aria-label="New ideas"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
       <div class="rb-list"></div>
-      <div class="rb-foot"><a href="#" class="rb-settings">Settings</a><span class="rb-meta"></span></div>`;
+      <div class="rb-foot"><span><a href="#" class="rb-settings">Settings</a> · <a href="#" class="rb-conn">🤝 Connect</a></span><span class="rb-meta"></span></div>`;
     document.body.appendChild(panel);
     placePanel(btn);
 
     panel.querySelector(".rb-x").onclick = closePanel;
+    panel.querySelector(".rb-conn").onclick = (e) => {
+      e.preventDefault();
+      const a = current && current.article;
+      closePanel();
+      if (a) doConnect(a);
+    };
     panel.querySelector(".rb-settings").onclick = (e) => {
       e.preventDefault();
       safeSend({ type: "openOptions" });
@@ -342,13 +429,15 @@
     return { q: rbQueue, last: rbLastPost };
   }
 
-  async function enqueue(item) {
+  async function enqueue(item, quiet) {
     const { q, last } = await getQ();
     const prev = q.length ? q[q.length - 1].at : last;
-    const at = Math.max(Date.now() + UNDO_MS, prev ? prev + gap() : 0);
+    // Follows are quick; replies keep the 10 to 12 second spacing.
+    const spacing = item.kind === "follow" ? 3000 + Math.floor(Math.random() * 2001) : gap();
+    const at = Math.max(Date.now() + UNDO_MS, prev ? prev + spacing : 0);
     q.push({ ...item, id: Math.random().toString(36).slice(2), at });
     await chrome.storage.local.set({ rbQueue: q });
-    toast(q.length > 1 ? `Queued, ${q.length - 1} ahead of it` : "Posting shortly…");
+    if (!quiet) toast(q.length > 1 ? `Queued, ${q.length - 1} ahead of it` : "Posting shortly…");
     renderPill();
   }
 
@@ -392,7 +481,7 @@
     const next = q[0];
     const secs = Math.max(0, Math.ceil((next.at - Date.now()) / 1000));
     pill.querySelector(".rb-pill-t").textContent = next.sending
-      ? `Posting… ${q.length > 1 ? `(${q.length - 1} more queued)` : ""}`
+      ? `${next.kind === "follow" ? "Following" : "Posting"}… ${q.length > 1 ? `(${q.length - 1} more queued)` : ""}`
       : `Queue: ${q.length} · next in ${secs}s`;
   }
 
@@ -412,6 +501,13 @@
     item.sending = now;
     await chrome.storage.local.set({ rbQueue: q });
     renderPill();
+    if (item.kind === "follow") {
+      const r = await safeSend({ type: "followUser", handle: item.handle });
+      const rest = (await getQ()).q.filter((x) => x.id !== item.id);
+      await chrome.storage.local.set({ rbQueue: rest });
+      toast(r && r.ok ? (r.already ? `Already following @${item.handle}` : `Followed @${item.handle} ✓`) : `Couldn't follow @${item.handle}`);
+      return renderPill();
+    }
     const res = await safeSend({ type: "postReply", statusId: item.statusId, text: item.text });
 
     const fresh = (await getQ()).q.filter((x) => x.id !== item.id);
@@ -426,6 +522,23 @@
       toast(`Couldn't post that one (${(res && res.error) || "no response"}). Text copied.`);
     }
     renderPill();
+  }
+
+  // In a background tab opened by the queue: confirm "Follow @handle". Never presses Unfollow.
+  async function runFollowJob(handle) {
+    const confirmBtn = await waitFor(() => {
+      const b = document.querySelector('[data-testid="confirmationSheetConfirm"]');
+      if (b) return b;
+      if (document.querySelector('[data-testid$="-unfollow"]')) return "already";
+      return null;
+    }, 15000);
+    if (confirmBtn === "already") return safeSend({ type: "jobDone", ok: true, already: true });
+    if (!confirmBtn) return safeSend({ type: "jobDone", ok: false, error: "follow page didn't load" });
+    const label = (confirmBtn.innerText || "").trim();
+    if (!/^follow\b/i.test(label)) return safeSend({ type: "jobDone", ok: true, already: true });
+    confirmBtn.click();
+    const gone = await waitFor(() => (!document.querySelector('[data-testid="confirmationSheetConfirm"]') ? true : null), 8000);
+    safeSend({ type: "jobDone", ok: !!gone, error: gone ? "" : "X didn't confirm the follow" });
   }
 
   // In a background tab opened by the queue: fill the reply and post it.
@@ -449,6 +562,10 @@
 
   (async () => {
     const job = await safeSend({ type: "myJob" });
+    if (job && job.kind === "follow") {
+      isJobTab = true;
+      return runFollowJob(job.handle);
+    }
     if (job && job.text) {
       isJobTab = true;
       return runJob(job.text);

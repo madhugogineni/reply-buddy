@@ -5,11 +5,13 @@ function flash(msg, cls = "ok") {
 }
 
 async function loadVoice() {
-  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned", "readImages", "autoPost", "voiceHandle", "voiceFileName", "autoRefresh", "voiceRefreshedAt", "voiceChange", "rulesBackup", "sinceRefresh"]);
+  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned", "readImages", "autoPost", "voiceHandle", "voiceFileName", "autoRefresh", "voiceRefreshedAt", "voiceChange", "rulesBackup", "sinceRefresh", "connectTemplates", "connectFollow"]);
   $("count").value = String(s.count || RB_DEFAULTS.count);
   $("readImages").checked = s.readImages !== false;
   $("autoPost").checked = !!s.autoPost;
   $("autoRefresh").checked = s.autoRefresh !== false;
+  $("connectTemplates").value = s.connectTemplates || RB_CONNECT_DEFAULT;
+  $("connectFollow").checked = s.connectFollow !== false;
   const when = s.voiceRefreshedAt ? new Date(s.voiceRefreshedAt).toLocaleString() : "";
   $("refreshInfo").textContent =
     (when ? `Last updated ${when}${s.voiceChange ? ": " + s.voiceChange : ""}. ` : "") +
@@ -33,6 +35,8 @@ async function save() {
     readImages: $("readImages").checked,
     autoPost: $("autoPost").checked,
     autoRefresh: $("autoRefresh").checked,
+    connectTemplates: $("connectTemplates").value.trim() || RB_CONNECT_DEFAULT,
+    connectFollow: $("connectFollow").checked,
     about: $("about").value.trim(),
     rules: $("rules").value,
     samples: $("samples").value,
