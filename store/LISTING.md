@@ -26,7 +26,7 @@ Social & Communication
 **Language**
 English
 
-**Description**
+**Description** (don't list provider names here: Google rejected that as keyword stuffing, violation "Yellow Argon")
 
 ```
 Reply Buddy suggests short, human replies to posts on x.com, written in your own voice.
@@ -47,7 +47,7 @@ LET'S CONNECT
 • Optionally follow them at the same time.
 
 YOUR KEY, YOUR CHOICE OF MODEL
-Works with Claude (Anthropic), OpenAI, Google Gemini, OpenRouter, DeepSeek, Groq, Mistral, xAI (Grok) or any OpenAI-compatible API, including a local model. Pick any model your key can use.
+Bring your own API key from a major AI provider, or any OpenAI-compatible service, including a model running on your own computer. Pick any model your key can use, from fast and cheap to the most capable.
 
 PRIVATE BY DESIGN
 • No accounts and no servers of our own.
