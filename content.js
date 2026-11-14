@@ -1,5 +1,7 @@
 (() => {
   const MARK = "data-rb-done";
+  // "Quick bolt": a reply bubble with a lightning bolt.
+  const BOLT_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5a7.5 7 0 0 1 15 0 7.5 7 0 0 1-10.6 6.4L4.5 19.5l1.3-3.6A6.8 6.8 0 0 1 4 11.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.6 7l-3.1 4.9h2.6l-1 4 3.2-5h-2.6z" fill="currentColor"/></svg>`;
   let panel = null;
   let current = null; // { article, info, btn }
   let pending = null; // reply we inserted, waiting for the user to post
@@ -59,7 +61,8 @@
     btn.type = "button";
     btn.className = "rb-btn";
     btn.title = "Suggest a reply";
-    btn.textContent = "✨";
+    btn.setAttribute("aria-label", "Suggest a reply");
+    btn.innerHTML = BOLT_ICON;
     btn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();

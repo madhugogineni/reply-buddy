@@ -1,16 +1,13 @@
 .rb-btn {
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
-  padding: 7px 9px;
-  margin-left: 4px;
-  opacity: 0.75;
-  transition: background 0.15s, opacity 0.15s;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; padding: 0; margin-left: 4px;
+  background: transparent; border: 0; border-radius: 999px; cursor: pointer;
+  color: #e0283c; line-height: 0;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
 }
-.rb-btn:hover { opacity: 1; background: rgba(29, 155, 240, 0.12); }
+.rb-btn svg { width: 20px; height: 20px; display: block; }
+.rb-btn:hover { color: #ff3b4f; background: rgba(224, 40, 60, 0.14); }
+.rb-btn:active { transform: scale(0.92); }
 
 .rb-panel {
   position: fixed;

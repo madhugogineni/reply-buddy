@@ -1,12 +1,12 @@
-# Reply Buddy for X ✨
+# Reply Buddy for X ⚡
 
-A Chrome extension that suggests short, human replies to posts on x.com **in your own voice**. Click ✨ on any post, pick one of the ideas, tweak it if you like, and press Reply yourself.
+A Chrome extension that suggests short, human replies to posts on x.com **in your own voice**. Click ⚡ on any post, pick one of the ideas, tweak it if you like, and press Reply yourself.
 
 It never posts anything on its own: every reply is one you picked. That's deliberate: X doesn't allow unsupervised AI reply bots, and accounts that auto-reply get suspended. Reply Buddy only drafts the reply. You stay the one who posts.
 
 ## Features
 
-- **✨ on every post** in your feed, on profiles and in threads
+- **⚡ on every post** in your feed, on profiles and in threads
 - **Reads images**: photos, video thumbnails and link previews are sent to the model (you can turn this off)
 - **Optional one-click posting**: posts the idea you pick after a 3-second undo window, with at least 20 seconds between posts
 - **2 to 4 reply ideas** per post, each from a different angle, plus an optional nudge ("agree", "joke", "ask why")
@@ -33,19 +33,19 @@ Until it's on the Chrome Web Store:
 
    A chat subscription (Claude Pro, ChatGPT Plus, Codex) doesn't come with an API key. You need a key from the developer console of the provider you pick.
 2. **Teach it your voice.** Enter your X handle and click **Learn my voice**. It opens your Replies tab, scrolls through about 150 of your recent replies (around 2 minutes; keep the tab in front), then writes your style rules. You can also import a voice file instead.
-3. **Use it.** Go to your feed and click ✨ on any post.
+3. **Use it.** Go to your feed and click ⚡ on any post.
 
 You can edit your rules and examples, switch providers, or export and import your voice at any time from the extension's settings (click its toolbar icon).
 
 ## Cost
 
-Each ✨ click is one small API call, usually well under a cent on the small models (Claude Haiku, GPT mini models, Gemini Flash). Learning your voice is one larger call. Check your provider's usage page.
+Each ⚡ click is one small API call, usually well under a cent on the small models (Claude Haiku, GPT mini models, Gemini Flash). Learning your voice is one larger call. Check your provider's usage page.
 
 ## Files
 
 | File | What it does |
 |---|---|
-| `content.js` / `content.css` | Adds the ✨ button and panel on x.com, fills the reply box, runs "Learn my voice" |
+| `content.js` / `content.css` | Adds the ⚡ button and panel on x.com, fills the reply box, runs "Learn my voice" |
 | `background.js` | Builds the prompt and calls the model |
 | `providers.js` | Claude, OpenAI and Gemini API calls, plus model listing |
 | `welcome.html` / `welcome.js` | First-run setup |
@@ -54,7 +54,7 @@ Each ✨ click is one small API call, usually well under a cent on the small mod
 
 ## When X changes its layout
 
-X changes its page structure from time to time. If the ✨ button disappears or the reply box doesn't fill in, the reply is copied to your clipboard instead. The selectors live at the top of `content.js` (`article[data-testid="tweet"]`, `[data-testid="tweetTextarea_0"]` and so on). Issues and PRs are welcome.
+X changes its page structure from time to time. If the ⚡ button disappears or the reply box doesn't fill in, the reply is copied to your clipboard instead. The selectors live at the top of `content.js` (`article[data-testid="tweet"]`, `[data-testid="tweetTextarea_0"]` and so on). Issues and PRs are welcome.
 
 After changing any file, click the reload icon on the extension in `chrome://extensions`, then refresh the X tab.
 
