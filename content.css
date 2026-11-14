@@ -91,3 +91,13 @@
 
 .rb-countdown { display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 18px; }
 .rb-countdown button { background: #fff; color: #1d9bf0; border: 0; border-radius: 999px; padding: 6px 14px; font: inherit; font-weight: 700; cursor: pointer; }
+
+.rb-pill {
+  position: fixed; left: 20px; bottom: 20px; z-index: 2147483001;
+  display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 16px;
+  background: #e0283c; color: #fff; border-radius: 999px;
+  font: 14px -apple-system, "Segoe UI", Roboto, sans-serif; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+.rb-pill button { background: rgba(255, 255, 255, 0.18); color: #fff; border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-weight: 600; cursor: pointer; }
+.rb-pill button:hover { background: rgba(255, 255, 255, 0.3); }
+.rb-pill .rb-clear { padding: 6px 10px; }

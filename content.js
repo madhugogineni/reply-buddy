@@ -38,7 +38,9 @@
       );
     const seen = new Set();
     const uniqueMedia = media.filter((m) => m.url && !seen.has(m.url) && seen.add(m.url)).slice(0, 4);
-    return { post, quoted, author, images, media: uniqueMedia, cardText, toMe };
+    const timeLink = [...article.querySelectorAll('a[href*="/status/"]')].find((a) => a.querySelector("time"));
+    const statusId = (timeLink?.getAttribute("href").match(/\/status\/(\d+)/) || [])[1] || "";
+    return { post, quoted, author, images, media: uniqueMedia, cardText, toMe, statusId };
   }
 
   function readThread(article) {
@@ -240,6 +242,8 @@
   async function insertReply(ref, text) {
     const { article, info } = ref;
     closePanel();
+    const { autoPost } = await chrome.storage.local.get("autoPost").catch(() => ({}));
+    if (autoPost && info.statusId) return enqueue({ statusId: info.statusId, text, post: info.post });
     const replyBtn = article.querySelector('[data-testid="reply"]');
     if (!replyBtn) return fallbackCopy(text);
     replyBtn.click();
@@ -262,62 +266,147 @@
       editable.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
     }
     pending = { post: info.post, at: Date.now() };
-
-    const { autoPost } = await chrome.storage.local.get("autoPost").catch(() => ({}));
-    if (autoPost) countdownPost(editable);
   }
 
-  // ---------- one-click posting (opt-in) ----------
-  let lastAutoPost = 0;
-  const MIN_GAP_MS = 20000; // never post faster than this, to stay clear of spam detection
+  // ---------- one-click posting queue (opt-in) ----------
+  // Picked replies are queued and posted one at a time, 10 to 12 seconds apart
+  // (3 seconds for the first, as an undo window). Each one posts from a small
+  // background tab that closes itself. The queue lives in storage, so it survives reloads.
+  const UNDO_MS = 3000;
+  const gap = () => 10000 + Math.floor(Math.random() * 2001);
+  const runnerId = Math.random().toString(36).slice(2);
+  let isJobTab = false;
+  let pill = null;
 
-  function countdownPost(editable) {
-    const wait = Math.max(3000, lastAutoPost + MIN_GAP_MS - Date.now());
-    // Reserve this slot now, so a second pick during the countdown queues behind it.
-    const prevSlot = lastAutoPost;
-    lastAutoPost = Date.now() + wait;
-    const t = document.createElement("div");
-    t.className = "rb-toast rb-countdown";
-    t.innerHTML = `<span></span><button type="button">Undo</button>`;
-    document.body.appendChild(t);
-    const label = t.querySelector("span");
-    let cancelled = false;
-    const end = lastAutoPost;
-    const tick = setInterval(() => {
-      const left = Math.ceil((end - Date.now()) / 1000);
-      label.textContent = `Posting in ${left}s…`;
-    }, 200);
-    label.textContent = `Posting in ${Math.ceil(wait / 1000)}s…`;
-    const cancel = () => {
-      cancelled = true;
-      if (lastAutoPost === end) lastAutoPost = prevSlot; // give the slot back
-      clearInterval(tick);
-      t.remove();
-      editable.focus();
-    };
-    t.querySelector("button").onclick = cancel;
-    const onKey = (e) => e.key === "Escape" && cancel();
-    document.addEventListener("keydown", onKey, { once: true });
+  async function getQ() {
+    const { rbQueue = [], rbLastPost = 0 } = await chrome.storage.local.get(["rbQueue", "rbLastPost"]);
+    return { q: rbQueue, last: rbLastPost };
+  }
 
-    setTimeout(async () => {
-      clearInterval(tick);
-      document.removeEventListener("keydown", onKey);
-      if (cancelled) return;
-      t.remove();
-      const dlg = editable.closest('[role="dialog"]') || document;
-      const btn = await waitFor(() => {
-        const b = dlg.querySelector('[data-testid="tweetButton"]');
-        return b && b.getAttribute("aria-disabled") !== "true" && !b.disabled ? b : null;
-      }, 3000);
-      if (!btn || !document.contains(editable)) {
-        if (lastAutoPost === end) lastAutoPost = prevSlot;
-        return toast("Reply box closed, nothing posted.");
-      }
-      btn.click(); // goes through the learning listener like a normal click
-      lastAutoPost = Math.max(lastAutoPost, Date.now());
+  async function enqueue(item) {
+    const { q, last } = await getQ();
+    const prev = q.length ? q[q.length - 1].at : last;
+    const at = Math.max(Date.now() + UNDO_MS, prev ? prev + gap() : 0);
+    q.push({ ...item, id: Math.random().toString(36).slice(2), at });
+    await chrome.storage.local.set({ rbQueue: q });
+    toast(q.length > 1 ? `Queued, ${q.length - 1} ahead of it` : "Posting shortly…");
+    renderPill();
+  }
+
+  async function undoLast() {
+    const { q } = await getQ();
+    const idx = q.map((x) => !x.sending).lastIndexOf(true);
+    if (idx < 0) return;
+    const [removed] = q.splice(idx, 1);
+    await chrome.storage.local.set({ rbQueue: q });
+    try {
+      await navigator.clipboard.writeText(removed.text);
+      toast("Removed. Copied the text in case you want it.");
+    } catch {
+      toast("Removed from the queue.");
+    }
+    renderPill();
+  }
+
+  async function clearQueue() {
+    const { q } = await getQ();
+    await chrome.storage.local.set({ rbQueue: q.filter((x) => x.sending) });
+    renderPill();
+  }
+
+  async function renderPill() {
+    if (isJobTab) return;
+    const { q } = await getQ();
+    if (!q.length) {
+      if (pill) pill.remove();
+      pill = null;
+      return;
+    }
+    if (!pill) {
+      pill = document.createElement("div");
+      pill.className = "rb-pill";
+      pill.innerHTML = `<span class="rb-pill-t"></span><button type="button" class="rb-undo">Undo</button><button type="button" class="rb-clear" title="Clear queue">✕</button>`;
+      pill.querySelector(".rb-undo").onclick = undoLast;
+      pill.querySelector(".rb-clear").onclick = clearQueue;
+      document.body.appendChild(pill);
+    }
+    const next = q[0];
+    const secs = Math.max(0, Math.ceil((next.at - Date.now()) / 1000));
+    pill.querySelector(".rb-pill-t").textContent = next.sending
+      ? `Posting… ${q.length > 1 ? `(${q.length - 1} more queued)` : ""}`
+      : `Queue: ${q.length} · next in ${secs}s`;
+  }
+
+  // Only one X tab runs the queue at a time (heartbeat lock in storage).
+  async function runnerTick() {
+    const { rbRunner } = await chrome.storage.local.get("rbRunner");
+    const now = Date.now();
+    if (rbRunner && rbRunner.id !== runnerId && now - rbRunner.beat < 6000) return renderPill();
+    await chrome.storage.local.set({ rbRunner: { id: runnerId, beat: now } });
+
+    const { q } = await getQ();
+    renderPill();
+    const item = q[0];
+    if (!item || item.at > now) return;
+    if (item.sending && now - item.sending < 60000) return;
+
+    item.sending = now;
+    await chrome.storage.local.set({ rbQueue: q });
+    renderPill();
+    const res = await safeSend({ type: "postReply", statusId: item.statusId, text: item.text });
+
+    const fresh = (await getQ()).q.filter((x) => x.id !== item.id);
+    await chrome.storage.local.set({ rbQueue: fresh, rbLastPost: Date.now() });
+    if (res && res.ok) {
+      safeSend({ type: "learn", post: item.post, reply: item.text });
       toast("Replied ✓");
-    }, wait);
+    } else {
+      try {
+        await navigator.clipboard.writeText(item.text);
+      } catch {}
+      toast(`Couldn't post that one (${(res && res.error) || "no response"}). Text copied.`);
+    }
+    renderPill();
   }
+
+  // In a background tab opened by the queue: fill the reply and post it.
+  async function runJob(text) {
+    const editable = await waitFor(() => findEditable(document), 20000);
+    if (!editable) return safeSend({ type: "jobDone", ok: false, error: "reply box didn't load" });
+    editable.focus();
+    let ok = false;
+    try {
+      ok = document.execCommand("insertText", false, text);
+    } catch {}
+    await new Promise((r) => setTimeout(r, 150));
+    if (!ok || !editable.innerText.trim()) {
+      const dt = new DataTransfer();
+      dt.setData("text/plain", text);
+      editable.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    }
+    const btn = await waitFor(() => {
+      const b = document.querySelector('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
+      return b && b.getAttribute("aria-disabled") !== "true" && !b.disabled ? b : null;
+    }, 8000);
+    if (!btn) return safeSend({ type: "jobDone", ok: false, error: "post button stayed disabled" });
+    btn.click();
+    // Success once the box empties or goes away.
+    const done = await waitFor(() => {
+      const ed = findEditable(document);
+      return !ed || !ed.innerText.trim() ? true : null;
+    }, 12000);
+    safeSend({ type: "jobDone", ok: !!done, error: done ? "" : "X didn't confirm the post" });
+  }
+
+  (async () => {
+    const job = await safeSend({ type: "myJob" });
+    if (job && job.text) {
+      isJobTab = true;
+      return runJob(job.text);
+    }
+    setInterval(runnerTick, 1000);
+    runnerTick();
+  })();
 
   async function fallbackCopy(text) {
     try {

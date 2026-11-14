@@ -9,8 +9,39 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   if (reason === "install" && !s.apiKey) chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });
 });
 
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+// Queue jobs: tabId -> { text, finish }
+const jobs = new Map();
+
+function postReply({ statusId, text }) {
+  if (!/^\d+$/.test(String(statusId))) return Promise.resolve({ ok: false, error: "missing post id" });
+  return new Promise((resolve) => {
+    chrome.tabs.create({ url: `https://x.com/intent/post?in_reply_to=${statusId}`, active: false }, (tab) => {
+      if (!tab) return resolve({ ok: false, error: "couldn't open a tab" });
+      let settled = false;
+      const finish = (r) => {
+        if (settled) return;
+        settled = true;
+        jobs.delete(tab.id);
+        setTimeout(() => chrome.tabs.remove(tab.id).catch(() => {}), 1500);
+        resolve(r);
+      };
+      jobs.set(tab.id, { text, finish });
+      setTimeout(() => finish({ ok: false, error: "timed out" }), 45000);
+    });
+  });
+}
+
+chrome.tabs.onRemoved.addListener((tabId) => jobs.get(tabId)?.finish({ ok: false, error: "tab was closed" }));
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  const tabId = sender.tab && sender.tab.id;
   const handlers = {
+    postReply: () => postReply(msg),
+    myJob: async () => ({ text: jobs.get(tabId)?.text || "" }),
+    jobDone: async () => {
+      jobs.get(tabId)?.finish({ ok: !!msg.ok, error: msg.error || "" });
+      return { ok: true };
+    },
     suggest: () => suggest(msg),
     learn: () => learn(msg),
     listModels: () => rbListModels(msg.provider, msg.key).then((models) => ({ models, pick: rbPickModel(msg.provider, models) })),

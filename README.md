@@ -8,7 +8,7 @@ It never posts anything on its own: every reply is one you picked. That's delibe
 
 - **⚡ on every post** in your feed, on profiles and in threads
 - **Reads images**: photos, video thumbnails and link previews are sent to the model (you can turn this off)
-- **Optional one-click posting**: posts the idea you pick after a 3-second undo window, with at least 20 seconds between posts
+- **Optional one-click posting**: ideas you pick go into a queue and post 10 to 12 seconds apart (random) from a small background tab, so you can keep scrolling. Undo or clear the queue any time
 - **2 to 4 reply ideas** per post, each from a different angle, plus an optional nudge ("agree", "joke", "ask why")
 - **Learns your voice** by reading your own Replies tab and working out your style: length, slang, punctuation, emojis, languages
 - **Keeps learning**: every reply you post through it is saved (including your edits) and used as an example
