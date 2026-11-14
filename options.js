@@ -11,7 +11,7 @@ async function loadVoice() {
   $("autoPost").checked = !!s.autoPost;
   $("autoRefresh").checked = s.autoRefresh !== false;
   $("connectTemplates").value = s.connectTemplates || RB_CONNECT_DEFAULT;
-  $("connectFollow").checked = s.connectFollow !== false;
+  $("connectFollow").checked = !!s.connectFollow;
   const when = s.voiceRefreshedAt ? new Date(s.voiceRefreshedAt).toLocaleString() : "";
   $("refreshInfo").textContent =
     (when ? `Last updated ${when}${s.voiceChange ? ": " + s.voiceChange : ""}. ` : "") +
