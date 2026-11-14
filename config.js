@@ -1,7 +1,7 @@
 // Reply Buddy business settings. Edit these, not the code.
 const RB_CONFIG = {
   // false = no limits, no payments, no plan UI (used by the "personal" branch).
-  paywall: true,
+  paywall: false,
   // The extension ID you registered on https://extensionpay.com (must match exactly).
   extpayId: "reply-buddy",
   // Replies a free user can use per day (counted when they pick an idea).
