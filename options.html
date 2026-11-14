@@ -65,8 +65,12 @@
     <textarea id="rules"></textarea>
     <label>Replies you've written <span class="hint">one per line</span></label>
     <textarea id="samples"></textarea>
-    <p class="hint">Post → reply examples: <b id="pairsCount">0</b>. Learned from replies you posted with Reply Buddy: <b id="learnedCount">0</b> (last 30 are used).</p>
+    <p class="hint">Post → reply examples: <b id="pairsCount">0</b>. Learned from replies you've posted on X in this browser: <b id="learnedCount">0</b> (up to 500 kept; the 15 most relevant are sent with each post).</p>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input id="autoRefresh" type="checkbox" style="width:auto" /> Keep my voice up to date <span class="hint">(updates the rules from your newest replies after every 60 replies)</span></label>
+    <p class="hint" id="refreshInfo"></p>
     <div class="bar">
+      <button id="refreshNow" class="ghost">Update my voice now</button>
+      <button id="undoRefresh" class="ghost hidden">Undo last update</button>
       <button id="relearn" class="ghost">Learn my voice again</button>
       <button id="clear" class="ghost">Clear learned replies</button>
     </div>

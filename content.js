@@ -475,19 +475,69 @@
   }
 
   // ---------- learning from what you actually post ----------
+  // Every reply you post on x.com in this browser is saved as an example,
+  // whether it started as a suggestion or you typed it yourself.
+  // Original posts and quote posts are skipped.
+
+  // The post being replied to, for a reply box in a dialog or under a post page.
+  function replyContext(button) {
+    const dialog = button.closest('[role="dialog"]');
+    const scope = dialog || document;
+    const ed = findEditable(scope);
+    if (!ed) return null;
+    const text = ed.innerText.trim();
+    if (!text) return null;
+
+    if (dialog) {
+      const ctx = textOf(dialog);
+      if (!/Replying to/i.test(ctx)) return null; // new post or quote post
+      const parent = dialog.querySelector('article [data-testid="tweetText"], [data-testid="tweetText"]');
+      return { text, post: textOf(parent) };
+    }
+    // Inline reply box on a post's own page
+    const m = location.pathname.match(/\/status\/(\d+)/);
+    if (!m) return null;
+    const box = ed.closest("form") || ed.parentElement?.parentElement?.parentElement;
+    const area = (box && textOf(box)) + " " + (ed.getAttribute("aria-label") || "");
+    const focal = [...document.querySelectorAll('article[data-testid="tweet"]')].find((a) =>
+      a.querySelector(`a[href*="/status/${m[1]}"] time`)
+    );
+    if (!focal && !/reply/i.test(area)) return null;
+    return { text, post: textOf(focal?.querySelector('[data-testid="tweetText"]')) };
+  }
+
+  let lastLearned = "";
+  function learnFrom(button) {
+    if (isJobTab) return; // the queue saves those itself
+    const r = replyContext(button);
+    if (!r) return;
+    const key = r.text + "|" + r.post;
+    if (key === lastLearned) return; // double click or click + shortcut
+    lastLearned = key;
+    safeSend({ type: "learn", post: r.post || (pending && pending.post) || "", reply: r.text });
+    pending = null;
+  }
+
   document.addEventListener(
     "click",
     (e) => {
       if (panel && !panel.contains(e.target) && !e.target.closest(".rb-btn")) closePanel();
+      const btn = e.target.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
+      if (btn && btn.getAttribute("aria-disabled") !== "true") learnFrom(btn);
+    },
+    true
+  );
 
-      const post = e.target.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
-      if (!post || !pending) return;
-      if (Date.now() - pending.at > 15 * 60 * 1000) return (pending = null);
-      const scope = post.closest('[role="dialog"]') || document;
-      const ed = findEditable(scope);
-      const finalText = ed ? ed.innerText.trim() : "";
-      if (finalText) safeSend({ type: "learn", post: pending.post, reply: finalText });
-      pending = null;
+  // Cmd/Ctrl + Enter also posts on X.
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey)) return;
+      const ed = e.target.closest && e.target.closest('[data-testid^="tweetTextarea_"]');
+      if (!ed) return;
+      const scope = ed.closest('[role="dialog"]') || document;
+      const btn = scope.querySelector('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
+      if (btn && btn.getAttribute("aria-disabled") !== "true") learnFrom(btn);
     },
     true
   );

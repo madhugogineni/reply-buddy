@@ -156,7 +156,8 @@ async function rbCallModel({ provider, key, model, baseUrl, system, user, images
       body: JSON.stringify({
         model,
         max_tokens: maxTokens,
-        system,
+        // The system prompt (voice rules and examples) is the same on every call, so cache it.
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         messages: [
           {
             role: "user",

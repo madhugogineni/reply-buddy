@@ -5,10 +5,16 @@ function flash(msg, cls = "ok") {
 }
 
 async function loadVoice() {
-  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned", "readImages", "autoPost", "voiceHandle", "voiceFileName"]);
+  const s = await chrome.storage.local.get(["count", "about", "rules", "samples", "pairs", "learned", "readImages", "autoPost", "voiceHandle", "voiceFileName", "autoRefresh", "voiceRefreshedAt", "voiceChange", "rulesBackup", "sinceRefresh"]);
   $("count").value = String(s.count || RB_DEFAULTS.count);
   $("readImages").checked = s.readImages !== false;
   $("autoPost").checked = !!s.autoPost;
+  $("autoRefresh").checked = s.autoRefresh !== false;
+  const when = s.voiceRefreshedAt ? new Date(s.voiceRefreshedAt).toLocaleString() : "";
+  $("refreshInfo").textContent =
+    (when ? `Last updated ${when}${s.voiceChange ? ": " + s.voiceChange : ""}. ` : "") +
+    `${s.sinceRefresh || 0} new replies since the last update.`;
+  $("undoRefresh").classList.toggle("hidden", !s.rulesBackup);
   $("about").value = s.about || "";
   $("rules").value = s.rules || RB_DEFAULTS.rules;
   $("samples").value = s.samples || "";
@@ -26,6 +32,7 @@ async function save() {
     count: Number($("count").value),
     readImages: $("readImages").checked,
     autoPost: $("autoPost").checked,
+    autoRefresh: $("autoRefresh").checked,
     about: $("about").value.trim(),
     rules: $("rules").value,
     samples: $("samples").value,
@@ -124,6 +131,22 @@ async function loadPlan(force) {
     uploadVoice(e.dataTransfer.files[0]);
   });
 
+  $("refreshNow").onclick = async () => {
+    $("refreshNow").disabled = true;
+    flash("Updating your voice…", "");
+    const r = await send({ type: "refreshVoice" });
+    $("refreshNow").disabled = false;
+    if (r.error) flash(r.error === "NO_KEY" ? "Add your API key first." : r.error, "err");
+    else flash(`Updated: ${r.changes || r.rules + " rules"}`);
+    loadVoice();
+  };
+  $("undoRefresh").onclick = async () => {
+    const r = await send({ type: "undoRefresh" });
+    if (r.error) flash(r.error, "err");
+    else flash("Restored the previous rules");
+    loadVoice();
+  };
+
   $("clear").onclick = async () => {
     await chrome.storage.local.set({ learned: [] });
     $("learnedCount").textContent = "0";
@@ -131,6 +154,6 @@ async function loadPlan(force) {
   };
 
   chrome.storage.onChanged.addListener((c) => {
-    if (c.voiceLearnedAt) loadVoice();
+    if (c.voiceLearnedAt || c.voiceRefreshedAt) loadVoice();
   });
 })();
