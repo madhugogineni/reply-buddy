@@ -1,4 +1,43 @@
 (() => {
+  // After the extension is reloaded or updated, the copy of this script already
+  // running in open X tabs loses its connection. Stop it quietly instead of
+  // logging "Extension context invalidated" over and over.
+  const alive = () => {
+    try {
+      return !!(chrome.runtime && chrome.runtime.id);
+    } catch {
+      return false;
+    }
+  };
+  let shutDown = false;
+  const timers = [];
+  function shutdown() {
+    if (shutDown) return;
+    shutDown = true;
+    timers.forEach(clearInterval);
+    try {
+      observer.disconnect();
+    } catch {}
+    document.querySelectorAll(".rb-pill, .rb-panel, .rb-btn, .rb-connect").forEach((el) => el.remove());
+    const t = document.createElement("div");
+    t.className = "rb-toast";
+    t.textContent = "Reply Buddy was updated. Refresh this tab to use it.";
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 6000);
+  }
+  const isStale = (err) => /Extension context invalidated/i.test(String((err && err.message) || err || ""));
+  window.addEventListener("unhandledrejection", (e) => {
+    if (isStale(e.reason)) {
+      e.preventDefault();
+      shutdown();
+    }
+  });
+  window.addEventListener("error", (e) => {
+    if (isStale(e.error || e.message)) {
+      e.preventDefault();
+      shutdown();
+    }
+  });
   const MARK = "data-rb-done";
   // "Quick bolt": a reply bubble with a lightning bolt.
   const BOLT_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5a7.5 7 0 0 1 15 0 7.5 7 0 0 1-10.6 6.4L4.5 19.5l1.3-3.6A6.8 6.8 0 0 1 4 11.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.6 7l-3.1 4.9h2.6l-1 4 3.2-5h-2.6z" fill="currentColor"/></svg>`;
@@ -221,14 +260,15 @@
   }
 
   let queued = false;
-  new MutationObserver(() => {
+  const observer = new MutationObserver(() => {
     if (queued) return;
     queued = true;
     requestAnimationFrame(() => {
       queued = false;
       scan();
     });
-  }).observe(document.body, { childList: true, subtree: true });
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
   scan();
 
   // ---------- panel ----------
@@ -521,6 +561,16 @@
 
   // Only one X tab runs the queue at a time (heartbeat lock in storage).
   async function runnerTick() {
+    if (!alive()) return shutdown();
+    try {
+      await runnerTickInner();
+    } catch (e) {
+      if (isStale(e)) shutdown();
+      else console.warn("Reply Buddy queue:", e);
+    }
+  }
+
+  async function runnerTickInner() {
     const { rbRunner } = await chrome.storage.local.get("rbRunner");
     const now = Date.now();
     if (rbRunner && rbRunner.id !== runnerId && now - rbRunner.beat < 6000) return renderPill();
@@ -604,7 +654,7 @@
       isJobTab = true;
       return runJob(job.text);
     }
-    setInterval(runnerTick, 1000);
+    timers.push(setInterval(runnerTick, 1000));
     runnerTick();
   })();
 
