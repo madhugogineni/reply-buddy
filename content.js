@@ -273,13 +273,16 @@
 
   function countdownPost(editable) {
     const wait = Math.max(3000, lastAutoPost + MIN_GAP_MS - Date.now());
+    // Reserve this slot now, so a second pick during the countdown queues behind it.
+    const prevSlot = lastAutoPost;
+    lastAutoPost = Date.now() + wait;
     const t = document.createElement("div");
     t.className = "rb-toast rb-countdown";
     t.innerHTML = `<span></span><button type="button">Undo</button>`;
     document.body.appendChild(t);
     const label = t.querySelector("span");
     let cancelled = false;
-    const end = Date.now() + wait;
+    const end = lastAutoPost;
     const tick = setInterval(() => {
       const left = Math.ceil((end - Date.now()) / 1000);
       label.textContent = `Posting in ${left}s…`;
@@ -287,6 +290,7 @@
     label.textContent = `Posting in ${Math.ceil(wait / 1000)}s…`;
     const cancel = () => {
       cancelled = true;
+      if (lastAutoPost === end) lastAutoPost = prevSlot; // give the slot back
       clearInterval(tick);
       t.remove();
       editable.focus();
@@ -305,9 +309,12 @@
         const b = dlg.querySelector('[data-testid="tweetButton"]');
         return b && b.getAttribute("aria-disabled") !== "true" && !b.disabled ? b : null;
       }, 3000);
-      if (!btn || !document.contains(editable)) return toast("Reply box closed, nothing posted.");
+      if (!btn || !document.contains(editable)) {
+        if (lastAutoPost === end) lastAutoPost = prevSlot;
+        return toast("Reply box closed, nothing posted.");
+      }
       btn.click(); // goes through the learning listener like a normal click
-      lastAutoPost = Date.now();
+      lastAutoPost = Math.max(lastAutoPost, Date.now());
       toast("Replied ✓");
     }, wait);
   }
