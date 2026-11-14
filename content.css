@@ -1,13 +1,23 @@
-.rb-btn {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; padding: 0; margin-left: 4px;
-  background: transparent; border: 0; border-radius: 999px; cursor: pointer;
-  color: #e0283c; line-height: 0;
-  transition: background 0.15s, color 0.15s, transform 0.1s;
+/* Our buttons sit in X's action row: stretch to the row's height and centre the
+   icon like X does. --rb-size and --rb-gray are copied from X's own icons. */
+.rb-btn, .rb-connect {
+  position: relative; flex: 0 0 auto; align-self: stretch;
+  display: flex; align-items: center; justify-content: center;
+  height: auto; min-height: 20px; width: auto; min-width: 20px;
+  padding: 0 2px; margin: 0 0 0 16px;
+  background: transparent; border: 0; cursor: pointer; line-height: 0;
 }
-.rb-btn svg { width: 20px; height: 20px; display: block; }
-.rb-btn:hover { color: #ff3b4f; background: rgba(224, 40, 60, 0.14); }
-.rb-btn:active { transform: scale(0.92); }
+.rb-btn::before, .rb-connect::before {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: calc(var(--rb-size, 19px) + 16px); height: calc(var(--rb-size, 19px) + 16px);
+  transform: translate(-50%, -50%); border-radius: 50%;
+  background: transparent; transition: background 0.15s;
+}
+.rb-btn svg, .rb-connect svg { position: relative; width: var(--rb-size, 19px); height: var(--rb-size, 19px); display: block; }
+.rb-btn { color: #e0283c; }
+.rb-btn:hover { color: #ff3b4f; }
+.rb-btn:hover::before { background: rgba(224, 40, 60, 0.14); }
+.rb-btn:active svg, .rb-connect:active svg { transform: scale(0.9); }
 
 .rb-panel {
   position: fixed;
@@ -108,16 +118,10 @@
 .rb-pay .rb-upgrade:hover { background: #ff3b4f; }
 .rb-pay .rb-login { font-size: 12px; color: #1d9bf0; text-align: center; }
 
-.rb-connect {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 34px; height: 34px; padding: 0; margin-left: 2px;
-  background: transparent; border: 0; border-radius: 999px; cursor: pointer;
-  color: #71767b; line-height: 0; transition: background 0.15s, color 0.15s, transform 0.1s;
-}
+.rb-connect { color: var(--rb-gray, #71767b); transition: color 0.15s; }
 .rb-connect.rb-hot { color: #00ba7c; }
-.rb-connect svg { width: 20px; height: 20px; display: block; }
-.rb-connect:hover { color: #00ba7c; background: rgba(0, 186, 124, 0.14); }
-.rb-connect:active { transform: scale(0.92); }
+.rb-connect:hover { color: #00ba7c; }
+.rb-connect:hover::before { background: rgba(0, 186, 124, 0.14); }
 .rb-connect:disabled { opacity: 0.5; cursor: default; }
 .rb-foot .rb-conn { color: #00ba7c; }
 

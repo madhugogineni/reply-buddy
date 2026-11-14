@@ -52,7 +52,9 @@ const planForJson = (p) => ({ ...p, left: p.left === Infinity ? null : p.left })
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
-  const s = await chrome.storage.local.get(["apiKey", "provider", "setupDone"]);
+  const s = await chrome.storage.local.get(["apiKey", "provider", "setupDone", "followDefaultOff"]);
+  // Following after "let's connect" is now off by default; reset it once for existing installs.
+  if (!s.followDefaultOff) await chrome.storage.local.set({ connectFollow: false, followDefaultOff: true });
   // Older versions stored a Claude key with no provider.
   if (s.apiKey && !s.provider) await chrome.storage.local.set({ provider: "anthropic", setupDone: true });
   if (reason === "install" && !s.apiKey) chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") });

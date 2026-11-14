@@ -186,7 +186,7 @@
     const { handle, name } = authorOf(article);
     if (!handle || handle.toLowerCase() === myHandle()) return toast("That's your own post.");
     const options = await connectOptions(name);
-    const { connectFollow = true } = await chrome.storage.local.get("connectFollow");
+    const { connectFollow = false } = await chrome.storage.local.get("connectFollow");
     current = { article, btn, info: readArticle(article) };
     panel = document.createElement("div");
     panel.className = "rb-panel rb-connect-panel" + (isDark() ? " rb-dark" : "");
@@ -208,7 +208,6 @@
       safeSend({ type: "openOptions" });
     };
     const followBox = panel.querySelector(".rb-follow input");
-    followBox.onchange = () => chrome.storage.local.set({ connectFollow: followBox.checked });
     panel.querySelectorAll(".rb-opt").forEach((b) => {
       b.onclick = () => {
         const follow = followBox.checked;
@@ -251,6 +250,13 @@
       e.stopPropagation();
       openPanel(article, btn);
     });
+    // Match X's icon size and grey for this row (19px in the feed, 23px on a post's page).
+    const xIcon = [...group.querySelectorAll("svg")].find((sv) => sv.getBoundingClientRect().width > 0);
+    if (xIcon) {
+      const r = xIcon.getBoundingClientRect();
+      group.style.setProperty("--rb-size", Math.round(r.width) + "px");
+      group.style.setProperty("--rb-gray", getComputedStyle(xIcon).color);
+    }
     group.appendChild(btn);
     addConnectButton(article, group);
   }
