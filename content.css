@@ -112,10 +112,15 @@
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; padding: 0; margin-left: 2px;
   background: transparent; border: 0; border-radius: 999px; cursor: pointer;
-  color: #00ba7c; line-height: 0; transition: background 0.15s, transform 0.1s;
+  color: #71767b; line-height: 0; transition: background 0.15s, color 0.15s, transform 0.1s;
 }
+.rb-connect.rb-hot { color: #00ba7c; }
 .rb-connect svg { width: 20px; height: 20px; display: block; }
-.rb-connect:hover { background: rgba(0, 186, 124, 0.14); }
+.rb-connect:hover { color: #00ba7c; background: rgba(0, 186, 124, 0.14); }
 .rb-connect:active { transform: scale(0.92); }
 .rb-connect:disabled { opacity: 0.5; cursor: default; }
 .rb-foot .rb-conn { color: #00ba7c; }
+
+.rb-connect-panel .rb-follow { display: flex; align-items: center; gap: 8px; padding: 0 12px 8px; font-size: 13px; cursor: pointer; }
+.rb-connect-panel .rb-follow input { width: auto; margin: 0; accent-color: #00ba7c; }
+.rb-connect-panel .rb-opt:hover { background: rgba(0, 186, 124, 0.1); border-color: rgba(0, 186, 124, 0.35); }

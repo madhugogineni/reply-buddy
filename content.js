@@ -104,25 +104,24 @@
     return { handle, name: firstName(display) };
   }
 
-  async function connectMessage(name) {
+  async function connectOptions(name) {
     const { connectTemplates } = await chrome.storage.local.get("connectTemplates");
-    const lines = (connectTemplates || RB_CONNECT_DEFAULT).split("\n").map((l) => l.trim()).filter(Boolean);
-    const { lastConnect = "" } = await chrome.storage.local.get("lastConnect");
-    const pool = lines.length > 1 ? lines.filter((l) => l !== lastConnect) : lines;
-    const tpl = pool[Math.floor(Math.random() * pool.length)] || "Hey {name}, let's connect :)";
-    await chrome.storage.local.set({ lastConnect: tpl });
-    return tpl.replace(/\{name\}/g, name || "man");
+    return (connectTemplates || RB_CONNECT_DEFAULT)
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((tpl) => tpl.replace(/\{name\}/g, name || "man"));
   }
 
-  async function doConnect(article) {
+  async function doConnect(article, text, follow) {
     const info = readArticle(article);
-    const { handle, name } = authorOf(article);
+    const { handle } = authorOf(article);
     const me = myHandle();
     if (!handle || handle.toLowerCase() === me) return toast("That's your own post.");
     const used = await safeSend({ type: "useReply", me });
     if (used && used.error === "LIMIT") return toast("You've used today's free replies. Upgrade in settings for unlimited.");
-    const text = await connectMessage(name);
-    const { connectFollow = true, autoPost } = await chrome.storage.local.get(["connectFollow", "autoPost"]);
+    const { autoPost } = await chrome.storage.local.get("autoPost");
+    const connectFollow = follow;
     if (connectFollow) await enqueue({ kind: "follow", handle }, true);
     if (autoPost && info.statusId) {
       await enqueue({ kind: "reply", statusId: info.statusId, text, post: info.post }, true);
@@ -142,21 +141,57 @@
     }
   }
 
+  // Opens a menu of connect replies with the person's name filled in.
+  async function openConnectPanel(article, btn) {
+    closePanel();
+    const { handle, name } = authorOf(article);
+    if (!handle || handle.toLowerCase() === myHandle()) return toast("That's your own post.");
+    const options = await connectOptions(name);
+    const { connectFollow = true } = await chrome.storage.local.get("connectFollow");
+    current = { article, btn, info: readArticle(article) };
+    panel = document.createElement("div");
+    panel.className = "rb-panel rb-connect-panel" + (isDark() ? " rb-dark" : "");
+    panel.innerHTML = `
+      <div class="rb-head">
+        <span>🤝 Connect with ${esc(name || "@" + handle)}</span>
+        <button class="rb-x" title="Close">✕</button>
+      </div>
+      <label class="rb-follow"><input type="checkbox" ${connectFollow ? "checked" : ""} /> Also follow @${esc(handle)}</label>
+      <div class="rb-list">${options
+        .map((o, i) => `<button class="rb-opt" data-i="${i}">${esc(o)}<small>${o.length}</small></button>`)
+        .join("")}</div>
+      <div class="rb-foot"><a href="#" class="rb-settings">Edit these replies</a><span class="rb-meta"></span></div>`;
+    document.body.appendChild(panel);
+    placePanel(btn);
+    panel.querySelector(".rb-x").onclick = closePanel;
+    panel.querySelector(".rb-settings").onclick = (e) => {
+      e.preventDefault();
+      safeSend({ type: "openOptions" });
+    };
+    const followBox = panel.querySelector(".rb-follow input");
+    followBox.onchange = () => chrome.storage.local.set({ connectFollow: followBox.checked });
+    panel.querySelectorAll(".rb-opt").forEach((b) => {
+      b.onclick = () => {
+        const follow = followBox.checked;
+        closePanel();
+        doConnect(article, options[+b.dataset.i], follow);
+      };
+    });
+  }
+
   function addConnectButton(article, group) {
     if (article.querySelector(".rb-connect")) return;
     const text = textOf(article.querySelector('[data-testid="tweetText"]'));
-    if (!CONNECT_RE.test(text)) return;
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "rb-connect";
-    b.title = "Let's connect: follow and reply";
+    b.className = "rb-connect" + (CONNECT_RE.test(text) ? " rb-hot" : "");
+    b.title = "Let's connect";
     b.setAttribute("aria-label", "Let's connect");
     b.innerHTML = HANDSHAKE_ICON;
     b.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
-      b.disabled = true;
-      doConnect(article).finally(() => (b.disabled = false));
+      openConnectPanel(article, b);
     });
     group.appendChild(b);
   }
@@ -243,9 +278,8 @@
     panel.querySelector(".rb-x").onclick = closePanel;
     panel.querySelector(".rb-conn").onclick = (e) => {
       e.preventDefault();
-      const a = current && current.article;
-      closePanel();
-      if (a) doConnect(a);
+      const c = current;
+      if (c) openConnectPanel(c.article, c.article.querySelector(".rb-connect") || c.btn);
     };
     panel.querySelector(".rb-settings").onclick = (e) => {
       e.preventDefault();
@@ -638,7 +672,7 @@
   document.addEventListener(
     "click",
     (e) => {
-      if (panel && !panel.contains(e.target) && !e.target.closest(".rb-btn")) closePanel();
+      if (panel && !panel.contains(e.target) && !e.target.closest(".rb-btn, .rb-connect")) closePanel();
       const btn = e.target.closest('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
       if (btn && btn.getAttribute("aria-disabled") !== "true") learnFrom(btn);
     },
