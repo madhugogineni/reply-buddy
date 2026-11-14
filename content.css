@@ -91,3 +91,6 @@
 .rb-learn small { opacity: 0.85; }
 
 .rb-note { font-size: 12px; opacity: 0.6; padding: 4px 10px 8px; }
+
+.rb-countdown { display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 18px; }
+.rb-countdown button { background: #fff; color: #1d9bf0; border: 0; border-radius: 999px; padding: 6px 14px; font: inherit; font-weight: 700; cursor: pointer; }

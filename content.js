@@ -259,6 +259,54 @@
       editable.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
     }
     pending = { post: info.post, at: Date.now() };
+
+    const { autoPost } = await chrome.storage.local.get("autoPost").catch(() => ({}));
+    if (autoPost) countdownPost(editable);
+  }
+
+  // ---------- one-click posting (opt-in) ----------
+  let lastAutoPost = 0;
+  const MIN_GAP_MS = 20000; // never post faster than this, to stay clear of spam detection
+
+  function countdownPost(editable) {
+    const wait = Math.max(3000, lastAutoPost + MIN_GAP_MS - Date.now());
+    const t = document.createElement("div");
+    t.className = "rb-toast rb-countdown";
+    t.innerHTML = `<span></span><button type="button">Undo</button>`;
+    document.body.appendChild(t);
+    const label = t.querySelector("span");
+    let cancelled = false;
+    const end = Date.now() + wait;
+    const tick = setInterval(() => {
+      const left = Math.ceil((end - Date.now()) / 1000);
+      label.textContent = `Posting in ${left}s…`;
+    }, 200);
+    label.textContent = `Posting in ${Math.ceil(wait / 1000)}s…`;
+    const cancel = () => {
+      cancelled = true;
+      clearInterval(tick);
+      t.remove();
+      editable.focus();
+    };
+    t.querySelector("button").onclick = cancel;
+    const onKey = (e) => e.key === "Escape" && cancel();
+    document.addEventListener("keydown", onKey, { once: true });
+
+    setTimeout(async () => {
+      clearInterval(tick);
+      document.removeEventListener("keydown", onKey);
+      if (cancelled) return;
+      t.remove();
+      const dlg = editable.closest('[role="dialog"]') || document;
+      const btn = await waitFor(() => {
+        const b = dlg.querySelector('[data-testid="tweetButton"]');
+        return b && b.getAttribute("aria-disabled") !== "true" && !b.disabled ? b : null;
+      }, 3000);
+      if (!btn || !document.contains(editable)) return toast("Reply box closed, nothing posted.");
+      btn.click(); // goes through the learning listener like a normal click
+      lastAutoPost = Date.now();
+      toast("Replied ✓");
+    }, wait);
   }
 
   async function fallbackCopy(text) {

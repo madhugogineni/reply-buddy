@@ -2,11 +2,13 @@
 
 A Chrome extension that suggests short, human replies to posts on x.com **in your own voice**. Click ✨ on any post, pick one of the ideas, tweak it if you like, and press Reply yourself.
 
-It never posts anything on its own. That's deliberate: X doesn't allow unsupervised AI reply bots, and accounts that auto-reply get suspended. Reply Buddy only drafts the reply. You stay the one who posts.
+It never posts anything on its own: every reply is one you picked. That's deliberate: X doesn't allow unsupervised AI reply bots, and accounts that auto-reply get suspended. Reply Buddy only drafts the reply. You stay the one who posts.
 
 ## Features
 
 - **✨ on every post** in your feed, on profiles and in threads
+- **Reads images**: photos, video thumbnails and link previews are sent to the model (you can turn this off)
+- **Optional one-click posting**: posts the idea you pick after a 3-second undo window, with at least 20 seconds between posts
 - **2 to 4 reply ideas** per post, each from a different angle, plus an optional nudge ("agree", "joke", "ask why")
 - **Learns your voice** by reading your own Replies tab and working out your style: length, slang, punctuation, emojis, languages
 - **Keeps learning**: every reply you post through it is saved (including your edits) and used as an example
