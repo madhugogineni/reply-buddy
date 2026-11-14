@@ -131,7 +131,7 @@ function importVoice(file) {
           const merged = [...v.learned, ...learned]
             .filter((l) => l && l.reply && !seen.has(l.reply) && seen.add(l.reply))
             .sort((a, b) => (a.at || 0) - (b.at || 0))
-            .slice(-80);
+            .slice(-500);
           await chrome.storage.local.set({ learned: merged });
         }
         resolve(v);

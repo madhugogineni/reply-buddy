@@ -100,6 +100,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     openPayment: async () => RB_CONFIG.paywall && ep().openPaymentPage(),
     openLogin: async () => RB_CONFIG.paywall && ep().openLoginPage(),
     learnVoice: () => learnVoice(msg),
+    refreshVoice: () => refreshVoice(),
+    undoRefresh: async () => {
+      const { rulesBackup } = await chrome.storage.local.get("rulesBackup");
+      if (!rulesBackup) throw new Error("Nothing to undo.");
+      await chrome.storage.local.set({ rules: rulesBackup, rulesBackup: "" });
+      return { ok: true };
+    },
     openOptions: async () => chrome.runtime.openOptionsPage(),
     openSetup: async () => chrome.tabs.create({ url: chrome.runtime.getURL("welcome.html") })
   };
@@ -132,7 +139,6 @@ async function getSettings() {
 function buildSystem(s) {
   const samples = s.samples.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 150);
   const pairs = s.pairs.slice(0, 40);
-  const learned = s.learned.slice(-30);
 
   let sys = `You write replies on X (Twitter) as the user${s.about ? ". About them: " + s.about : ""}.
 The reply has to read exactly like they typed it on their phone in a few seconds: a real person, friendly and casual, never an assistant and never a brand.
@@ -157,17 +163,51 @@ ${s.rules || "(none)"}`;
   if (pairs.length) {
     sys += `\n\nReal posts and how they actually replied:\n${pairs.map((p) => `POST: ${p.post}\nTHEIR REPLY: ${p.reply}`).join("\n\n")}`;
   }
-  if (learned.length) {
-    sys += `\n\nReplies they posted recently through this tool, after their own edits (the strongest signal):\n${learned
-      .map((l) => `POST: ${l.post.slice(0, 280)}\nTHEIR REPLY: ${l.reply}`)
-      .join("\n\n")}`;
-  }
   sys += `\n\nRespond with JSON only, no other text:\n{"skip": false, "reason": "", "replies": ["...", "..."]}`;
   return sys;
 }
 
-function buildUser({ post, thread, author, quoted, images, cardText, steer, toMe }, count, attached = []) {
+// ---------- picking which past replies to show ----------
+// The full history can grow to hundreds of replies; each request only gets the
+// ones whose original posts look most like this post, plus a few recent ones.
+const STOP = new Set(
+  "the a an and or but if so to of in on at for with from by is are was were be been it its this that these those i you he she we they my your our their me him her them just very really what when how why who which not no yes do does did can will would should could have has had get got about into out up down over more most some any all one".split(" ")
+);
+function words(t) {
+  return new Set(
+    String(t || "")
+      .toLowerCase()
+      .replace(/https?:\/\/\S+/g, " ")
+      .split(/[^a-z0-9₹$%]+/)
+      .filter((w) => w.length > 2 && !STOP.has(w))
+  );
+}
+function pickExamples(learned, post, nSimilar = 10, nRecent = 5) {
+  if (!learned.length) return [];
+  const target = words(post);
+  const scored = learned
+    .map((l, i) => {
+      const w = words(l.post);
+      let hit = 0;
+      w.forEach((x) => target.has(x) && hit++);
+      return { l, i, score: hit ? hit / Math.sqrt(w.size + 1) : 0 };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, nSimilar);
+  const chosen = new Set(scored.map((x) => x.i));
+  const recent = [];
+  for (let i = learned.length - 1; i >= 0 && recent.length < nRecent; i--) if (!chosen.has(i)) recent.push(i);
+  return [...scored.map((x) => x.i), ...recent].sort((a, b) => a - b).map((i) => learned[i]);
+}
+
+function buildUser({ post, thread, author, quoted, images, cardText, steer, toMe }, count, attached = [], examples = []) {
   let u = "";
+  if (examples.length) {
+    u += `Replies they posted recently on similar posts, after their own edits (the strongest signal for their voice):\n${examples
+      .map((l) => `POST: ${String(l.post || "").slice(0, 240)}\nTHEIR REPLY: ${l.reply}`)
+      .join("\n\n")}\n\n---\n\n`;
+  }
   if (toMe) u += `This person is replying to one of the user's own posts.\n\n`;
   if (thread && thread.length) u += `Earlier in the thread:\n${thread.map((t) => `- ${t}`).join("\n")}\n\n`;
   u += `Post by ${author || "someone"}:\n${post || "(no text)"}`;
@@ -259,7 +299,7 @@ async function suggest(msg) {
       model: s.model,
       baseUrl: s.baseUrl,
       system: buildSystem(s),
-      user: buildUser(msg, s.count, imgs),
+      user: buildUser(msg, s.count, imgs, pickExamples(s.learned, [msg.post, msg.quoted, msg.cardText].join(" "))),
       images: imgs,
       maxTokens: 500
     });
@@ -292,9 +332,68 @@ async function suggest(msg) {
 }
 
 async function learn({ post, reply }) {
+  reply = String(reply || "").trim();
+  if (!reply || reply.length > 400 || /https?:\/\//.test(reply)) return; // skip empty, long or link replies
   const { learned = [] } = await chrome.storage.local.get("learned");
-  learned.push({ post: post || "", reply, at: Date.now() });
-  await chrome.storage.local.set({ learned: learned.slice(-80) });
+  const last = learned[learned.length - 1];
+  if (last && last.reply === reply && Date.now() - last.at < 10 * 60 * 1000) return; // same reply twice
+  learned.push({ post: String(post || "").slice(0, 400), reply, at: Date.now() });
+  const { sinceRefresh = 0, autoRefresh = true } = await chrome.storage.local.get(["sinceRefresh", "autoRefresh"]);
+  await chrome.storage.local.set({ learned: learned.slice(-LEARNED_MAX), sinceRefresh: sinceRefresh + 1 });
+  if (autoRefresh && sinceRefresh + 1 >= REFRESH_EVERY) refreshVoice().catch((e) => console.warn("Reply Buddy: voice refresh failed", e));
+}
+
+// ---------- keeping the voice up to date ----------
+const LEARNED_MAX = 500; // replies kept in this browser
+const REFRESH_EVERY = 60; // new replies between automatic rule updates
+let refreshing = false;
+
+// Nudges the style rules using recent real replies. Keeps what still holds.
+async function refreshVoice() {
+  if (refreshing) return { ok: false, error: "Already updating" };
+  refreshing = true;
+  try {
+    const s = await getSettings();
+    if ((!s.apiKey && s.provider !== "custom") || !s.model) throw new Error("NO_KEY");
+    const recent = s.learned.slice(-120);
+    if (recent.length < 15) throw new Error("Post a few more replies first, then try again.");
+    const text = await rbCallModel({
+      provider: s.provider,
+      key: s.apiKey,
+      model: s.model,
+      baseUrl: s.baseUrl,
+      maxTokens: 1500,
+      system:
+        "You maintain a style guide for how one person replies on X, so another writer can copy them exactly. Be concrete and quote their real words.",
+      user: `Current style rules:
+${s.rules}
+
+Their most recent real replies, with the post each one answered:
+${recent.map((l) => (l.post ? `POST: ${l.post.slice(0, 200)}\nREPLY: ${l.reply}` : `REPLY: ${l.reply}`)).join("\n\n")}
+
+Update the rules so they match how this person replies now. Keep every rule that still holds, word it the same way, and keep its examples unless better ones exist. Fix rules the new replies contradict, and add rules for clear new habits. Don't drop anything just because it doesn't appear recently. 12 to 20 rules, each with 1 to 3 short quoted examples of their real replies. No em dashes.
+
+Return JSON only: {"rules": ["...", "..."], "changes": "one short line on what changed"}`
+    });
+    const out = parseJson(text) || {};
+    const rules = (out.rules || []).map((r) => String(r).replace(/\s*[—–]\s*/g, ", ").trim()).filter(Boolean);
+    if (rules.length < 5) throw new Error("The model didn't return usable rules. Your voice is unchanged.");
+    // Refresh the sample list too: newest real replies first, then the older samples.
+    const samples = [...new Set([...recent.map((l) => l.reply).reverse(), ...s.samples.split("\n").map((x) => x.trim())])]
+      .filter(Boolean)
+      .slice(0, 150);
+    await chrome.storage.local.set({
+      rules: rules.join("\n"),
+      samples: samples.join("\n"),
+      sinceRefresh: 0,
+      voiceRefreshedAt: Date.now(),
+      voiceChange: String(out.changes || "").slice(0, 200),
+      rulesBackup: s.rules // one step of undo
+    });
+    return { ok: true, rules: rules.length, changes: out.changes || "" };
+  } finally {
+    refreshing = false;
+  }
 }
 
 // Build a voice from the user's own replies collected on their Replies tab.

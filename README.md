@@ -11,7 +11,7 @@ It never posts anything on its own: every reply is one you picked. That's delibe
 - **Optional one-click posting**: ideas you pick go into a queue and post 10 to 12 seconds apart (random) from a small background tab, so you can keep scrolling. Undo or clear the queue any time
 - **2 to 4 reply ideas** per post, each from a different angle, plus an optional nudge ("agree", "joke", "ask why")
 - **Learns your voice** by reading your own Replies tab and working out your style: length, slang, punctuation, emojis, languages
-- **Keeps learning**: every reply you post through it is saved (including your edits) and used as an example
+- **Keeps learning**: every reply you post on x.com in this browser is saved, whether it was a suggestion or typed yourself. Up to 500 are kept, and each request sends only the 15 most relevant. Your style rules update themselves every 60 replies, with undo
 - **Bring your own key, any provider**: Claude (Anthropic), OpenAI, Google Gemini, OpenRouter (hundreds of models), DeepSeek, Groq, Mistral, xAI (Grok), or any OpenAI-compatible API including local Ollama. Pick from the provider's model list or type any model ID
 - **Private**: your key and voice are stored only in your browser, and requests go straight to the provider you pick
 
