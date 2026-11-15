@@ -317,7 +317,7 @@
         <button class="rb-x" title="Close">✕</button>
       </div>
       <div class="rb-steer">
-        <input type="text" placeholder="Optional nudge: agree, joke, ask a question…" />
+        <input type="text" placeholder="Your thoughts (I'll polish them) or a nudge: agree, joke…" />
         <button class="rb-go" type="button" title="New ideas" aria-label="New ideas"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </div>
       ${likeBoxHtml(true)}
