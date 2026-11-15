@@ -89,56 +89,28 @@ async function loadConnection() {
   };
 }
 
-async function exportVoice() {
-  const s = await chrome.storage.local.get(["about", "rules", "samples", "pairs", "voiceHandle", "learned", "connectTemplates"]);
-  const voice = {
-    format: "reply-buddy-voice",
-    version: 1,
-    name: s.voiceHandle ? "@" + s.voiceHandle : "",
-    about: s.about || "",
-    rules: s.rules || "",
-    samples: s.samples || "",
-    pairs: s.pairs || [],
-    // Replies posted through Reply Buddy, after your edits. Never includes your API key.
-    learned: s.learned || [],
-    connectTemplates: s.connectTemplates || ""
-  };
-  const blob = new Blob([JSON.stringify(voice, null, 2)], { type: "application/json" });
+async function exportProfile(includeKey) {
+  const profile = await rbBuildProfile(includeKey);
+  const handle = profile.data.voiceHandle || "my";
+  const blob = new Blob([JSON.stringify(profile, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = (s.voiceHandle || "my") + "-voice.json";
+  a.download = `${handle}-reply-buddy-profile${includeKey ? "-with-key" : ""}.json`;
   a.click();
 }
+// Kept for older buttons: a profile without the key.
+const exportVoice = () => exportProfile(false);
 
+// Accepts profile files and older voice files. Returns a summary.
 function importVoice(file) {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = async () => {
       try {
-        const v = JSON.parse(r.result);
-        if (v.format !== "reply-buddy-voice") throw new Error("That isn't a Reply Buddy voice file.");
-        await chrome.storage.local.set({
-          about: v.about || "",
-          rules: v.rules || RB_DEFAULTS.rules,
-          samples: v.samples || "",
-          pairs: Array.isArray(v.pairs) ? v.pairs.slice(0, 60) : [],
-          // "Madhu (@madhugogineni97)" or "@madhugogineni97" -> madhugogineni97
-          voiceHandle: ((v.name || "").match(/@([A-Za-z0-9_]+)/) || [])[1] || ""
-        });
-        if (v.connectTemplates) await chrome.storage.local.set({ connectTemplates: v.connectTemplates });
-        // Merge learned replies from the file with any already here, newest last.
-        if (Array.isArray(v.learned) && v.learned.length) {
-          const { learned = [] } = await chrome.storage.local.get("learned");
-          const seen = new Set();
-          const merged = [...v.learned, ...learned]
-            .filter((l) => l && l.reply && !seen.has(l.reply) && seen.add(l.reply))
-            .sort((a, b) => (a.at || 0) - (b.at || 0))
-            .slice(-500);
-          await chrome.storage.local.set({ learned: merged });
-        }
-        resolve(v);
+        const summary = await rbApplyProfile(JSON.parse(r.result), { withKey: true });
+        resolve({ ...summary, name: summary.handle ? "@" + summary.handle : file.name });
       } catch (e) {
-        reject(e);
+        reject(e instanceof SyntaxError ? new Error("That file isn't a Reply Buddy profile.") : e);
       }
     };
     r.onerror = () => reject(new Error("Couldn't read the file."));

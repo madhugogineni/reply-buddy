@@ -1,4 +1,4 @@
-importScripts("ExtPay.js", "config.js", "defaults.js", "providers.js");
+importScripts("ExtPay.js", "config.js", "defaults.js", "providers.js", "profile.js");
 
 // ---------- payments (ExtensionPay) ----------
 // ExtPay must be started once at the top level of the service worker.
@@ -50,6 +50,126 @@ async function useReply(handle) {
 const planForJson = (p) => ({ ...p, left: p.left === Infinity ? null : p.left });
 
 chrome.action.onClicked.addListener(() => chrome.runtime.openOptionsPage());
+
+
+// ---------- Chrome sync (same Google account, any Chrome) ----------
+// The profile is stored in chrome.storage.sync in small chunks (8 KB per item,
+// ~100 KB total). Last change wins for settings and voice; learned replies are merged.
+const SYNC_BUDGET = 92000;
+const SYNC_MIN_GAP_MS = 60000; // at most one upload a minute (Chrome limits sync writes)
+let pushTimer = null;
+
+async function deviceId() {
+  let { rbDevice } = await chrome.storage.local.get("rbDevice");
+  if (!rbDevice) {
+    rbDevice = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    await chrome.storage.local.set({ rbDevice });
+  }
+  return rbDevice;
+}
+
+async function syncSettings() {
+  const { syncEnabled = false, syncKey = false } = await chrome.storage.local.get(["syncEnabled", "syncKey"]);
+  return { syncEnabled, syncKey };
+}
+
+function chunkText(text) {
+  const out = [];
+  let i = 0;
+  let size = 6000;
+  while (i < text.length) {
+    let piece = text.slice(i, i + size);
+    // Escaping can grow a piece; shrink until it fits Chrome's per-item limit.
+    while (JSON.stringify(piece).length > 8000) piece = piece.slice(0, Math.floor(piece.length * 0.8));
+    out.push(piece);
+    i += piece.length;
+  }
+  return out;
+}
+
+async function pushProfile(reason) {
+  const { syncEnabled, syncKey } = await syncSettings();
+  if (!syncEnabled) return { ok: false, error: "Sync is off" };
+  const profile = await rbBuildProfile(syncKey);
+  const data = profile.data;
+  const at = Date.now();
+  const device = await deviceId();
+  let text = JSON.stringify({ at, device, data });
+  // Too big for Chrome sync? Leave out the oldest learned replies from the synced copy.
+  while (text.length > SYNC_BUDGET && data.learned && data.learned.length) {
+    data.learned = data.learned.slice(Math.ceil(data.learned.length * 0.2));
+    text = JSON.stringify({ at, device, data });
+  }
+  const chunks = chunkText(text);
+  const { rb_sync_meta: old } = await chrome.storage.sync.get("rb_sync_meta");
+  const items = { rb_sync_meta: { v: 1, at, device, n: chunks.length } };
+  chunks.forEach((c, i) => (items["rb_sync_" + i] = c));
+  try {
+    await chrome.storage.sync.set(items);
+    if (old && old.n > chunks.length) {
+      const stale = [];
+      for (let i = chunks.length; i < old.n; i++) stale.push("rb_sync_" + i);
+      await chrome.storage.sync.remove(stale);
+    }
+    await chrome.storage.local.set({ syncDirty: false, syncedAt: at, lastPush: at, syncError: "" });
+    return { ok: true, at, size: text.length, reason };
+  } catch (e) {
+    await chrome.storage.local.set({ syncError: String(e.message || e).slice(0, 200) });
+    return { ok: false, error: e.message };
+  }
+}
+
+async function pullProfile(force) {
+  const { syncEnabled, syncKey } = await syncSettings();
+  if (!syncEnabled) return { ok: false, error: "Sync is off" };
+  const { rb_sync_meta: meta } = await chrome.storage.sync.get("rb_sync_meta");
+  if (!meta) return { ok: true, nothing: true };
+  const { syncedAt = 0 } = await chrome.storage.local.get("syncedAt");
+  const me = await deviceId();
+  if (!force && (meta.device === me || meta.at <= syncedAt)) return { ok: true, upToDate: true };
+  const keys = Array.from({ length: meta.n }, (_, i) => "rb_sync_" + i);
+  const got = await chrome.storage.sync.get(keys);
+  let payload;
+  try {
+    payload = JSON.parse(keys.map((k) => got[k] || "").join(""));
+  } catch {
+    return { ok: false, error: "Synced profile is incomplete; it will retry on the next change." };
+  }
+  await rbApplyProfile({ format: "reply-buddy-profile", data: payload.data }, { withKey: syncKey, remote: true });
+  await chrome.storage.local.set({ syncedAt: meta.at, syncError: "" });
+  return { ok: true, applied: true, at: meta.at };
+}
+
+async function schedulePush() {
+  await chrome.storage.local.set({ syncDirty: true });
+  const { lastPush = 0 } = await chrome.storage.local.get("lastPush");
+  const wait = Math.max(5000, lastPush + SYNC_MIN_GAP_MS - Date.now());
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => pushProfile("change"), wait);
+}
+
+// Upload anything left over from a worker that was shut down before its timer fired.
+async function flushIfDirty() {
+  const { syncDirty, lastPush = 0 } = await chrome.storage.local.get(["syncDirty", "lastPush"]);
+  if (syncDirty && Date.now() - lastPush > SYNC_MIN_GAP_MS) pushProfile("catch-up");
+}
+
+const SYNC_WATCH = new Set([...RB_PROFILE_KEYS, ...RB_SECRET_KEYS]);
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area === "sync" && changes.rb_sync_meta) return pullProfile(false);
+  if (area !== "local" || changes.rbRemoteApply) return; // our own write of a synced profile
+  if (!Object.keys(changes).some((k) => SYNC_WATCH.has(k))) return;
+  const { syncEnabled } = await syncSettings();
+  if (syncEnabled) schedulePush();
+});
+
+// The service worker wakes often; finish any upload a previous run didn't get to.
+flushIfDirty();
+
+chrome.runtime.onStartup.addListener(async () => {
+  await pullProfile(false);
+  flushIfDirty();
+});
 
 chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   const s = await chrome.storage.local.get(["apiKey", "provider", "setupDone", "followDefaultOff"]);
@@ -115,6 +235,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     openPayment: async () => RB_CONFIG.paywall && ep().openPaymentPage(),
     openLogin: async () => RB_CONFIG.paywall && ep().openLoginPage(),
     learnVoice: () => learnVoice(msg),
+    syncNow: async () => {
+      const pulled = await pullProfile(true);
+      const pushed = await pushProfile("manual");
+      return { pulled, pushed };
+    },
+    syncEnable: async () => {
+      // Turning sync on: take what's already synced first (if any), then upload the result.
+      const pulled = await pullProfile(true);
+      const pushed = await pushProfile("enabled");
+      return { pulled, pushed };
+    },
     refreshVoice: () => refreshVoice(),
     undoRefresh: async () => {
       const { rulesBackup } = await chrome.storage.local.get("rulesBackup");

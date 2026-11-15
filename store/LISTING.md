@@ -36,7 +36,7 @@ Click the red bolt under any post and you get 2 to 4 reply ideas, each from a di
 LEARNS HOW YOU WRITE
 • "Learn my voice" reads your recent replies and works out your style: length, slang, punctuation, emojis, the languages you mix in.
 • It keeps learning from every reply you post in this browser, and updates your style rules as your writing changes.
-• Upload or download your voice as a file to back it up or move it to another computer.
+• Download your profile as a file, or turn on Chrome sync to use the same profile in every Chrome you're signed in to.
 
 READS THE WHOLE POST
 • Sees images, video thumbnails and link previews, so it can reply to a meme or a screenshot, not just the text.
@@ -85,7 +85,7 @@ Reply Buddy helps the user reply to posts on x.com: it suggests short replies wr
 
 | Permission | Justification to paste |
 |---|---|
-| `storage` | Stores the user's settings, API key, writing-style rules, reply history used to learn their style, connect templates and the posting queue, locally in the browser. |
+| `storage` | Stores the user's settings, API key, writing-style rules, reply history used to learn their style, connect templates and the posting queue, locally in the browser. If the user turns on profile sync, a copy of their profile is kept in chrome.storage.sync so their other Chrome browsers get it. |
 | Host: `x.com`, `twitter.com` (content script) | Adds the reply and connect buttons to posts, reads the post the user wants to reply to, fills in or posts the reply the user picked, follows an account when the user asks, and learns from replies the user posts. |
 | Host: `api.anthropic.com`, `api.openai.com`, `generativelanguage.googleapis.com`, `openrouter.ai`, `api.deepseek.com`, `api.groq.com`, `api.mistral.ai`, `api.x.ai` | Sends the post and the user's style instructions to the AI provider the user selected in settings, with the user's own API key, to generate reply suggestions. Only the selected provider is contacted. |
 | Host: `pbs.twimg.com` | Downloads images from the post the user is replying to, so the AI model can see them. Can be turned off in settings. |

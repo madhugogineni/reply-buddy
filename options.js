@@ -29,6 +29,22 @@ async function loadVoice() {
   $("learnedCount").textContent = (s.learned || []).length;
 }
 
+async function loadSync() {
+  const s = await chrome.storage.local.get(["syncEnabled", "syncKey", "syncedAt", "syncError"]);
+  $("syncEnabled").checked = !!s.syncEnabled;
+  $("syncKey").checked = !!s.syncKey;
+  $("syncKey").disabled = !s.syncEnabled;
+  $("syncNow").disabled = !s.syncEnabled;
+  $("syncStatus").className = s.syncError ? "err" : "hint";
+  $("syncStatus").textContent = !s.syncEnabled
+    ? "Off on this browser."
+    : s.syncError
+      ? "Sync problem: " + s.syncError
+      : s.syncedAt
+        ? "Last synced " + new Date(s.syncedAt).toLocaleString() + "."
+        : "On. Waiting for the first sync.";
+}
+
 async function save() {
   await saveConnection();
   await chrome.storage.local.set({
@@ -101,6 +117,45 @@ async function loadPlan(force) {
     out.textContent = (res.skip ? "(suggests skipping)\n" : "") + res.replies.map((r) => "• " + r).join("\n");
   };
 
+  loadSync();
+  $("syncEnabled").onchange = async () => {
+    const on = $("syncEnabled").checked;
+    await chrome.storage.local.set({ syncEnabled: on });
+    if (on) {
+      $("syncStatus").textContent = "Syncing…";
+      const r = await send({ type: "syncEnable" });
+      if (r.pulled && r.pulled.applied) {
+        await loadConnection();
+        await loadVoice();
+        flash("Pulled your profile from another browser");
+      } else if (r.pushed && r.pushed.ok) flash("Sync is on");
+    }
+    loadSync();
+  };
+  $("syncKey").onchange = async () => {
+    await chrome.storage.local.set({ syncKey: $("syncKey").checked });
+    send({ type: "syncNow" }).then(loadSync);
+  };
+  $("syncNow").onclick = async () => {
+    $("syncStatus").textContent = "Syncing…";
+    const r = await send({ type: "syncNow" });
+    if (r.pulled && r.pulled.applied) {
+      await loadConnection();
+      await loadVoice();
+    }
+    loadSync();
+    flash(r.pushed && r.pushed.ok ? "Synced" : "Sync problem", r.pushed && r.pushed.ok ? "ok" : "err");
+  };
+  $("exportProfile").onclick = () => exportProfile($("exportKey").checked);
+  $("importProfile").onclick = () => $("importProfileFile").click();
+  $("importProfileFile").onchange = async (e) => {
+    await uploadVoice(e.target.files[0]);
+    e.target.value = "";
+  };
+  chrome.storage.onChanged.addListener((c, area) => {
+    if (area === "local" && (c.syncedAt || c.syncError)) loadSync();
+  });
+
   $("relearn").onclick = async () => {
     const { voiceHandle } = await chrome.storage.local.get("voiceHandle");
     if (voiceHandle) chrome.tabs.create({ url: `https://x.com/${voiceHandle}/with_replies#rb-learn` });
@@ -114,7 +169,8 @@ async function loadPlan(force) {
       const v = await importVoice(f);
       await chrome.storage.local.set({ voiceLearnedAt: Date.now(), voiceFileName: f.name });
       await loadVoice();
-      flash(`Loaded ${v.name || f.name}`);
+      flash(`Loaded ${v.name || f.name}: ${v.rules} rules, ${v.learned} learned replies${v.settings ? ", " + v.settings + " settings" : ""}${v.key ? ", API key" : ""}`);
+      await loadConnection();
     } catch (err) {
       flash(err.message, "err");
     }
