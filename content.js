@@ -419,6 +419,7 @@
     if (!items.length) html = `<div class="rb-msg">No ideas came back. Hit refresh.</div>`;
     const bits = [];
     if (res.sawImages) bits.push(`👀 Saw ${res.sawImages} image${res.sawImages > 1 ? "s" : ""}`);
+    if (res.fallback && res.model) bits.push(`↪ ${res.model}`);
     if (res.plan && res.plan.tier === "free") bits.push(`${res.plan.left} of ${res.plan.limit} free left today`);
     panel.querySelector(".rb-meta").textContent = bits.join(" · ");
     setList(html);

@@ -4,7 +4,7 @@
 
 // Settings and voice. Device-only state (queue, usage count, paid cache, locks) is never included.
 const RB_PROFILE_KEYS = [
-  "provider", "model", "baseUrl", "count", "readImages", "autoPost", "likeOnReply",
+  "provider", "model", "backupModels", "baseUrl", "count", "readImages", "autoPost", "likeOnReply",
   "connectFollow", "connectTemplates", "autoRefresh",
   "about", "rules", "samples", "pairs", "voiceHandle", "learned"
 ];

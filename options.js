@@ -29,6 +29,22 @@ async function loadVoice() {
   $("learnedCount").textContent = (s.learned || []).length;
 }
 
+// Today's requests per model, and which ones are out until the daily reset.
+async function loadUsage() {
+  const u = await send({ type: "usage" });
+  const { model = "", backupModels = "" } = await chrome.storage.local.get(["model", "backupModels"]);
+  const chain = [...new Set([model, ...backupModels.split(/[\n,]/).map((m) => m.trim())].filter(Boolean))];
+  const names = [...new Set([...chain, ...Object.keys(u.counts || {})])];
+  if (!names.length || u.error) return ($("usageBox").textContent = "");
+  const rows = names.map((m) => {
+    const n = (u.counts || {})[m] || 0;
+    const tag = (u.out || {})[m] ? " · out for today" : chain.indexOf(m) === 0 ? " · main" : chain.includes(m) ? " · backup" : "";
+    return `${m}: ${n} today${tag}`;
+  });
+  const reset = RB_PROVIDERS[u.provider]?.resetZone ? " (resets at midnight Pacific time)" : "";
+  $("usageBox").textContent = `Requests today${reset}: ` + rows.join("  |  ");
+}
+
 async function loadSync() {
   const s = await chrome.storage.local.get(["syncEnabled", "syncKey", "syncedAt", "syncError"]);
   $("syncEnabled").checked = !!s.syncEnabled;
@@ -91,8 +107,10 @@ async function loadPlan(force) {
   $("manage").onclick = () => send({ type: "openPayment" });
   $("login").onclick = () => send({ type: "openLogin" });
   $("recheck").onclick = () => loadPlan(true);
+  loadUsage();
   chrome.storage.onChanged.addListener((c) => {
     if (c.rbPaid || c.rbUsage) loadPlan(false);
+    if (c.modelUsage || c.model || c.backupModels) loadUsage();
   });
 
   $("test").onclick = () => testKey($("s1"));
@@ -114,7 +132,10 @@ async function loadPlan(force) {
       out.textContent = res.error === "NO_KEY" ? "Add your API key first." : "Error: " + res.error;
       return;
     }
-    out.textContent = (res.skip ? "(suggests skipping)\n" : "") + res.replies.map((r) => "• " + r).join("\n");
+    out.textContent =
+      (res.fallback ? `(answered by backup model ${res.model})\n` : "") +
+      (res.skip ? "(suggests skipping)\n" : "") +
+      res.replies.map((r) => "• " + r).join("\n");
   };
 
   loadSync();

@@ -14,6 +14,7 @@ It never posts anything on its own: every reply is one you picked. That's delibe
 - **Learns your voice** by reading your own Replies tab and working out your style: length, slang, punctuation, emojis, languages
 - **Keeps learning**: every reply you post on x.com in this browser is saved, whether it was a suggestion or typed yourself. Up to 500 are kept, and each request sends only the 15 most relevant. Your style rules update themselves every 60 replies, with undo
 - **Bring your own key, any provider**: Claude (Anthropic), OpenAI, Google Gemini, OpenRouter (hundreds of models), DeepSeek, Groq, Mistral, xAI (Grok), or any OpenAI-compatible API including local Ollama. Pick from the provider's model list or type any model ID
+- **Backup models**: list a few backups and Reply Buddy switches to the next one when a model hits its daily or per-minute limit. On a free Gemini key this stacks each model's own daily allowance. Settings shows today's requests per model
 - **Sync and backup**: download your whole profile (voice, learned replies, connect replies, settings, and optionally your key) as a file, or turn on Chrome sync to keep every Chrome on your Google account in step
 - **Private**: your key and voice are stored only in your browser, and requests go straight to the provider you pick
 
@@ -63,7 +64,7 @@ The free-tier counter is stored in the browser, and the owner check runs on the 
 |---|---|
 | `content.js` / `content.css` | Adds the ⚡ button and panel on x.com, fills the reply box, runs "Learn my voice" |
 | `background.js` | Builds the prompt and calls the model |
-| `providers.js` | Claude, OpenAI and Gemini API calls, plus model listing |
+| `providers.js` | Claude, OpenAI and Gemini API calls, model listing, and rate-limit detection |
 | `welcome.html` / `welcome.js` | First-run setup |
 | `options.html` / `options.js` | Settings |
 | `profile.js` | Profile export, import and Chrome sync format |
