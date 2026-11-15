@@ -10,7 +10,7 @@ It never posts anything on its own: every reply is one you picked. That's delibe
 - **Reads images**: photos, video thumbnails and link previews are sent to the model (you can turn this off)
 - **Optional one-click posting**: ideas you pick go into a queue and post 10 to 12 seconds apart (random) from a small background tab, so you can keep scrolling. Undo or clear the queue any time
 - **🤝 Let's connect**: a handshake next to the bolt on every post (green on posts asking to connect). It opens your connect replies with their first name filled in; pick one and it follows them (optional) and replies
-- **2 to 4 reply ideas** per post, each from a different angle, plus an optional nudge ("agree", "joke", "ask why")
+- **2 to 4 reply ideas** per post, each from a different angle, plus an optional box for your own thoughts: type what you want to say, however rough, and every idea becomes a polished version of it (or just a nudge like "agree" or "joke")
 - **Learns your voice** by reading your own Replies tab and working out your style: length, slang, punctuation, emojis, languages
 - **Keeps learning**: every reply you post on x.com in this browser is saved, whether it was a suggestion or typed yourself. Up to 500 are kept, and each request sends only the 15 most relevant. Your style rules update themselves every 60 replies, with undo
 - **Bring your own key, any provider**: Claude (Anthropic), OpenAI, Google Gemini, OpenRouter (hundreds of models), DeepSeek, Groq, Mistral, xAI (Grok), or any OpenAI-compatible API including local Ollama. Pick from the provider's model list or type any model ID
