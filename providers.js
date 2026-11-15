@@ -21,7 +21,10 @@ const RB_PROVIDERS = {
     label: "Google Gemini",
     keyHint: "AIza...",
     keyUrl: "https://aistudio.google.com/app/apikey",
-    prefer: ["flash", "pro"]
+    // Flash-Lite first: on the free tier it gets far more requests per day than Flash.
+    prefer: ["flash-lite", "flash", "pro"],
+    // Free-tier daily limits are per model and reset at midnight Pacific time.
+    resetZone: "America/Los_Angeles"
   },
   openrouter: {
     label: "OpenRouter (hundreds of models, one key)",
@@ -74,18 +77,43 @@ function rbBaseUrl(provider, baseUrl) {
   return url.replace(/\/+$/, "");
 }
 
-async function rbReadError(res) {
-  let detail = "";
+// Builds an Error from a failed response. e.status is the HTTP status; e.quota says
+// what kind of limit was hit: "day" (daily quota), "minute" (short-term rate limit),
+// "credit" (out of money with the provider) or "" (not a limit at all).
+async function rbError(res) {
+  let raw = "";
+  try { raw = await res.text(); } catch {}
+  let detail = raw;
   try {
-    const j = await res.json();
-    detail = j.error?.message || j.message || (typeof j.error === "string" ? j.error : "") || JSON.stringify(j);
-  } catch {
-    try { detail = await res.text(); } catch {}
-  }
-  if (res.status === 401 || res.status === 403) return "That API key was rejected. Check it and try again.";
-  if (res.status === 402) return "Out of credit with this provider. " + detail.slice(0, 140);
-  if (res.status === 429) return "Rate limited or out of credit. " + detail.slice(0, 140);
-  return `API error ${res.status}: ${detail.slice(0, 200)}`;
+    const j = JSON.parse(raw);
+    detail = j.error?.message || j.message || (typeof j.error === "string" ? j.error : "") || raw;
+  } catch {}
+  let msg;
+  if (res.status === 401 || res.status === 403) msg = "That API key was rejected. Check it and try again.";
+  else if (res.status === 402) msg = "Out of credit with this provider. " + detail.slice(0, 140);
+  else if (res.status === 429) msg = "Rate limited or out of credit. " + detail.slice(0, 140);
+  else msg = `API error ${res.status}: ${detail.slice(0, 200)}`;
+  const e = new Error(msg);
+  e.status = res.status;
+  e.quota = rbQuotaKind(res.status, raw);
+  return e;
+}
+
+function rbQuotaKind(status, raw) {
+  if (status === 402) return "credit";
+  if (status !== 429) return "";
+  const s = String(raw || "").toLowerCase();
+  // Gemini names the quota it hit, e.g. "GenerateRequestsPerDayPerProjectPerModel-FreeTier".
+  if (/per ?day|perday|per_day|daily|requests per day|rpd/.test(s)) return "day";
+  if (/per ?minute|perminute|per_minute|rpm|tpm/.test(s)) return "minute";
+  if (/insufficient_quota|credit balance|billing|out of credit/.test(s)) return "credit";
+  return "minute";
+}
+
+// Today's date as YYYY-MM-DD in the zone where this provider's daily limits reset.
+function rbDayKey(provider) {
+  const zone = RB_PROVIDERS[provider]?.resetZone;
+  return new Intl.DateTimeFormat("en-CA", zone ? { timeZone: zone } : {}).format(new Date());
 }
 
 function rbAuthHeaders(key) {
@@ -101,7 +129,7 @@ async function rbListModels(provider, key, baseUrl) {
         "anthropic-dangerous-direct-browser-access": "true"
       }
     });
-    if (!res.ok) throw new Error(await rbReadError(res));
+    if (!res.ok) throw await rbError(res);
     const j = await res.json();
     return (j.data || []).map((m) => m.id);
   }
@@ -109,7 +137,7 @@ async function rbListModels(provider, key, baseUrl) {
     const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
       headers: { "x-goog-api-key": key }
     });
-    if (!res.ok) throw new Error(await rbReadError(res));
+    if (!res.ok) throw await rbError(res);
     const j = await res.json();
     return (j.models || [])
       .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
@@ -123,7 +151,7 @@ async function rbListModels(provider, key, baseUrl) {
   const base = provider === "openai" ? "https://api.openai.com/v1" : rbBaseUrl(provider, baseUrl);
   if (!base) throw new Error("Enter the provider's base URL first.");
   const res = await fetch(base + "/models", { headers: rbAuthHeaders(key) });
-  if (!res.ok) throw new Error(await rbReadError(res));
+  if (!res.ok) throw await rbError(res);
   const j = await res.json();
   const ids = (j.data || j.models || []).map((m) => m.id || m.name).filter(Boolean);
   const skip = /(audio|realtime|tts|transcribe|whisper|image|dall|embed|search|moderation|davinci|babbage|instruct|guard|rerank|ocr)/i;
@@ -140,6 +168,16 @@ function rbPickModel(provider, models) {
     if (hit) return hit;
   }
   return models[0] || "";
+}
+
+// Suggested backup models to fall back on when the main one hits its daily limit.
+// Only for Gemini, where each free-tier model has its own separate daily allowance.
+function rbPickBackups(provider, models, primary) {
+  if (provider !== "gemini") return [];
+  const stable = models.filter((m) => m !== primary && !/(preview|exp|latest|pro)/i.test(m));
+  const lite = stable.filter((m) => /flash-lite/i.test(m)).slice(0, 2);
+  const flash = stable.filter((m) => /flash/i.test(m) && !/lite/i.test(m)).slice(0, 1);
+  return [...lite, ...flash];
 }
 
 // images: [{ mime, data }] with base64 data. Sent inline to every provider.
@@ -169,7 +207,7 @@ async function rbCallModel({ provider, key, model, baseUrl, system, user, images
         ]
       })
     });
-    if (!res.ok) throw new Error(await rbReadError(res));
+    if (!res.ok) throw await rbError(res);
     const j = await res.json();
     return (j.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
   }
@@ -192,7 +230,7 @@ async function rbCallModel({ provider, key, model, baseUrl, system, user, images
         })
       }
     );
-    if (!res.ok) throw new Error(await rbReadError(res));
+    if (!res.ok) throw await rbError(res);
     const j = await res.json();
     return (j.candidates?.[0]?.content?.parts || []).map((p) => p.text || "").join("");
   }
@@ -226,7 +264,7 @@ async function rbCallModel({ provider, key, model, baseUrl, system, user, images
     headers["X-Title"] = "Reply Buddy";
   }
   const res = await fetch(base + "/chat/completions", { method: "POST", headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(await rbReadError(res));
+  if (!res.ok) throw await rbError(res);
   const j = await res.json();
   const content = j.choices?.[0]?.message?.content;
   return Array.isArray(content) ? content.map((c) => c.text || "").join("") : content || "";

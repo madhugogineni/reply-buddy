@@ -229,7 +229,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     suggest: () => suggest(msg),
     learn: () => learn(msg),
     listModels: () =>
-      rbListModels(msg.provider, msg.key, msg.baseUrl).then((models) => ({ models, pick: rbPickModel(msg.provider, models) })),
+      rbListModels(msg.provider, msg.key, msg.baseUrl).then((models) => {
+        const pick = rbPickModel(msg.provider, models);
+        return { models, pick, backups: rbPickBackups(msg.provider, models, pick) };
+      }),
+    usage: async () => {
+      const { provider } = await chrome.storage.local.get("provider");
+      return usageState(provider || RB_DEFAULTS.provider);
+    },
     plan: async () => planForJson(await planState(msg.me, msg.force)),
     useReply: async () => planForJson(await useReply(msg.me)),
     openPayment: async () => RB_CONFIG.paywall && ep().openPaymentPage(),
@@ -266,7 +273,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 async function getSettings() {
-  const s = await chrome.storage.local.get(["apiKey", "provider", "model", "count", "about", "rules", "samples", "pairs", "learned", "readImages", "baseUrl"]);
+  const s = await chrome.storage.local.get(["apiKey", "provider", "model", "backupModels", "count", "about", "rules", "samples", "pairs", "learned", "readImages", "baseUrl"]);
   return {
     apiKey: (s.apiKey || "").trim(),
     provider: s.provider || RB_DEFAULTS.provider,
@@ -278,8 +285,68 @@ async function getSettings() {
     pairs: s.pairs || [],
     learned: s.learned || [],
     readImages: s.readImages !== false,
-    baseUrl: s.baseUrl || ""
+    baseUrl: s.baseUrl || "",
+    backupModels: String(s.backupModels || "")
+      .split(/[\n,]/)
+      .map((m) => m.trim())
+      .filter(Boolean)
   };
+}
+
+// ---------- model fallback and daily usage ----------
+// Calls go to the main model first. When a model hits its daily limit it's marked out
+// until the provider's reset, and the next backup model takes over. A per-minute limit
+// just skips that model for a minute. Successful calls are counted per model per day.
+const cooldown = new Map(); // model -> timestamp until which it's skipped
+
+async function usageState(provider) {
+  const day = rbDayKey(provider);
+  const { modelUsage } = await chrome.storage.local.get("modelUsage");
+  return modelUsage && modelUsage.day === day && modelUsage.provider === provider
+    ? modelUsage
+    : { day, provider, counts: {}, out: {} };
+}
+
+async function recordUsage(provider, model, { out = false } = {}) {
+  const u = await usageState(provider);
+  if (out) u.out[model] = true;
+  else u.counts[model] = (u.counts[model] || 0) + 1;
+  await chrome.storage.local.set({ modelUsage: u });
+}
+
+function resetHint(provider) {
+  return RB_PROVIDERS[provider]?.resetZone ? "Daily limits reset at midnight Pacific time." : "Try again later.";
+}
+
+// run(model) makes the actual call. Returns { text, model }.
+async function callModels(s, run) {
+  const chain = [...new Set([s.model, ...s.backupModels].filter(Boolean))];
+  const u = await usageState(s.provider);
+  let lastErr = null;
+  for (const model of chain) {
+    if (u.out[model] || (cooldown.get(model) || 0) > Date.now()) continue;
+    try {
+      const text = await run(model);
+      await recordUsage(s.provider, model);
+      return { text, model };
+    } catch (e) {
+      // Only limits move us down the list. Bad keys, bad requests and empty credit don't.
+      if (e.quota !== "day" && e.quota !== "minute") throw e;
+      lastErr = e;
+      if (e.quota === "day") await recordUsage(s.provider, model, { out: true });
+      else cooldown.set(model, Date.now() + 60 * 1000);
+    }
+  }
+  const fresh = await usageState(s.provider);
+  const allOutToday = chain.every((m) => fresh.out[m]);
+  const e = new Error(
+    allOutToday
+      ? `${chain.length > 1 ? "All your models have" : "Your model has"} used up today's limit. ${resetHint(s.provider)}${chain.length > 1 ? "" : " Add backup models in settings to keep going."}`
+      : "Rate limited. Wait a minute and hit refresh."
+  );
+  e.quota = allOutToday ? "day" : "minute";
+  e.cause = lastErr;
+  throw e;
 }
 
 function buildSystem(s) {
@@ -439,25 +506,27 @@ async function suggest(msg) {
   if (plan.tier === "free" && plan.left <= 0) throw new Error("LIMIT");
   const images = s.readImages ? await loadImages(msg.media) : [];
   const call = (imgs) =>
-    rbCallModel({
-      provider: s.provider,
-      key: s.apiKey,
-      model: s.model,
-      baseUrl: s.baseUrl,
-      system: buildSystem(s),
-      user: buildUser(msg, s.count, imgs, pickExamples(s.learned, [msg.post, msg.quoted, msg.cardText].join(" "))),
-      images: imgs,
-      maxTokens: 500
-    });
+    callModels(s, (model) =>
+      rbCallModel({
+        provider: s.provider,
+        key: s.apiKey,
+        model,
+        baseUrl: s.baseUrl,
+        system: buildSystem(s),
+        user: buildUser(msg, s.count, imgs, pickExamples(s.learned, [msg.post, msg.quoted, msg.cardText].join(" "))),
+        images: imgs,
+        maxTokens: 500
+      })
+    );
 
-  let text;
+  let text, usedModel;
   let sawImages = images.length;
   try {
-    text = await call(images);
+    ({ text, model: usedModel } = await call(images));
   } catch (e) {
     // Some models can't take images. Retry once with text only.
-    if (!images.length || /key was rejected|Rate limited/.test(e.message)) throw e;
-    text = await call([]);
+    if (!images.length || e.status === 401 || e.status === 403 || e.quota) throw e;
+    ({ text, model: usedModel } = await call([]));
     sawImages = 0;
   }
 
@@ -473,6 +542,8 @@ async function suggest(msg) {
     reason: (out && out.reason) || "",
     replies,
     sawImages,
+    model: usedModel,
+    fallback: usedModel !== s.model,
     plan: planForJson(plan)
   };
 }
@@ -503,10 +574,10 @@ async function refreshVoice() {
     if ((!s.apiKey && s.provider !== "custom") || !s.model) throw new Error("NO_KEY");
     const recent = s.learned.slice(-120);
     if (recent.length < 15) throw new Error("Post a few more replies first, then try again.");
-    const text = await rbCallModel({
+    const { text } = await callModels(s, (model) => rbCallModel({
       provider: s.provider,
       key: s.apiKey,
-      model: s.model,
+      model,
       baseUrl: s.baseUrl,
       maxTokens: 1500,
       system:
@@ -520,7 +591,7 @@ ${recent.map((l) => (l.post ? `POST: ${l.post.slice(0, 200)}\nREPLY: ${l.reply}`
 Update the rules so they match how this person replies now. Keep every rule that still holds, word it the same way, and keep its examples unless better ones exist. Fix rules the new replies contradict, and add rules for clear new habits. Don't drop anything just because it doesn't appear recently. 12 to 20 rules, each with 1 to 3 short quoted examples of their real replies. No em dashes.
 
 Return JSON only: {"rules": ["...", "..."], "changes": "one short line on what changed"}`
-    });
+    }));
     const out = parseJson(text) || {};
     const rules = (out.rules || []).map((r) => String(r).replace(/\s*[—–]\s*/g, ", ").trim()).filter(Boolean);
     if (rules.length < 5) throw new Error("The model didn't return usable rules. Your voice is unchanged.");
@@ -567,10 +638,10 @@ async function learnVoice({ replies, handle }) {
     .map((r) => (r.post ? `POST: ${r.post.slice(0, 200)}\nREPLY: ${r.reply}` : `REPLY: ${r.reply}`))
     .join("\n\n");
 
-  const text = await rbCallModel({
+  const { text } = await callModels(s, (model) => rbCallModel({
     provider: s.provider,
     key: s.apiKey,
-    model: s.model,
+    model,
     baseUrl: s.baseUrl,
     maxTokens: 1500,
     system:
@@ -583,7 +654,7 @@ Write 12 to 18 short rules describing how this person replies. Cover: typical le
 Also write one short line about who they seem to be, based only on what they clearly say about themselves (leave it empty if unclear).
 
 Return JSON only: {"about": "...", "rules": ["...", "..."]}. Do not use em dashes.`
-  });
+  }));
   const out = parseJson(text) || {};
   const rules = (out.rules || []).map((r) => String(r).replace(/\s*[—–]\s*/g, ", ").trim()).filter(Boolean);
   if (!rules.length) throw new Error("The model didn't return any style rules. Try again.");

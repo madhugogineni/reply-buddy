@@ -42,6 +42,9 @@
         <select id="count"><option>2</option><option>3</option><option>4</option></select>
       </div>
     </div>
+    <label>Backup models <span class="hint">one per line, used in order when the model above hits its daily or per-minute limit</span></label>
+    <textarea id="backupModels" rows="3" placeholder="e.g. gemini-3.1-flash-lite"></textarea>
+    <div id="usageBox" class="hint"></div>
     <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input id="readImages" type="checkbox" style="width:auto" /> Look at images in posts <span class="hint">(costs a bit more per click)</span></label>
     <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input id="likeOnReply" type="checkbox" style="width:auto" /> Also like the post when I reply or connect <span class="hint">(default; untick it in the menu for one post)</span></label>
     <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input id="autoPost" type="checkbox" style="width:auto" /> Post automatically when I pick an idea <span class="hint">(queued and posted 10 to 12 seconds apart, with Undo)</span></label>

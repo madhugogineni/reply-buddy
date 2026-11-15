@@ -35,6 +35,9 @@ async function ensureHostPermission(url) {
   }
 }
 
+// Backup models suggested by the last key test, used where the page has no backup box.
+let suggestedBackups = null;
+
 // Tests the key by listing the models it can use. Returns true on success.
 async function testKey(statusEl) {
   const provider = $("provider").value;
@@ -58,34 +61,53 @@ async function testKey(statusEl) {
   const saved = await chrome.storage.local.get(["model", "provider"]);
   const current = $("model").value.trim();
   const keep = current && saved.provider === provider ? current : "";
-  setModels(res.models, keep || res.pick);
+  const main = keep || res.pick;
+  setModels(res.models, main);
+  const backups = (res.backups || []).filter((m) => m !== main);
+  suggestedBackups = backups;
+  const box = $("backupModels");
+  if (box && !box.value.trim()) box.value = backups.join("\n");
   statusEl.className = "ok";
-  statusEl.textContent = `Key works. Picked ${keep || res.pick}; change it below if you like.`;
+  statusEl.textContent = `Key works. Picked ${main}${backups.length ? ` with ${backups.length} backup${backups.length > 1 ? "s" : ""}` : ""}; change it below if you like.`;
   return true;
 }
 
 async function saveConnection() {
-  await chrome.storage.local.set({
+  const data = {
     provider: $("provider").value,
     apiKey: $("apiKey").value.trim(),
     baseUrl: ($("baseUrl").value || "").trim(),
     model: $("model").value.trim()
-  });
+  };
+  const box = $("backupModels");
+  if (box) {
+    data.backupModels = box.value
+      .split(/[\n,]/)
+      .map((m) => m.trim())
+      .filter((m) => m && m !== data.model)
+      .join("\n");
+  } else if (suggestedBackups) {
+    data.backupModels = suggestedBackups.join("\n");
+  }
+  await chrome.storage.local.set(data);
 }
 
 async function loadConnection() {
-  const s = await chrome.storage.local.get(["provider", "apiKey", "model", "baseUrl"]);
+  const s = await chrome.storage.local.get(["provider", "apiKey", "model", "baseUrl", "backupModels"]);
   fillProviders($("provider"));
   $("provider").value = RB_PROVIDERS[s.provider] ? s.provider : RB_DEFAULTS.provider;
   $("apiKey").value = s.apiKey || "";
   $("baseUrl").value = s.baseUrl || "";
   updateKeyHelp();
   setModels([], s.model || "");
+  if ($("backupModels")) $("backupModels").value = s.backupModels || "";
   $("provider").onchange = () => {
     updateKeyHelp();
     setModels([], "");
     $("model").value = "";
     $("apiKey").value = "";
+    if ($("backupModels")) $("backupModels").value = "";
+    suggestedBackups = null;
   };
 }
 
