@@ -41,7 +41,14 @@
     try {
       const v = await importVoice(f);
       await chrome.storage.local.set({ voiceLearnedAt: Date.now() });
-      voiceDone(`Imported ${v.name || "voice"}: ${(v.rules || "").split("\n").filter(Boolean).length} rules, ${(v.pairs || []).length} examples.`);
+      await loadConnection();
+      const c = await chrome.storage.local.get(["apiKey", "model"]);
+      if (c.apiKey && c.model) {
+        $("modelBox").classList.remove("hidden");
+        $("c1").classList.add("done");
+        $("learn").disabled = false;
+      }
+      voiceDone(`Imported ${v.name || "your profile"}: ${v.rules} style rules, ${v.learned} learned replies${v.key ? ", API key" : ""}.`);
     } catch (err) {
       $("s2").innerHTML = `<p class="err">${err.message}</p>`;
     }

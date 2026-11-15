@@ -14,7 +14,7 @@ manifest = json.loads((root / "manifest.json").read_text())
 config = (root / "config.js").read_text()
 paywall = not re.search(r"paywall:\s*false", config)
 
-files = ["manifest.json", "background.js", "content.js", "content.css", "providers.js", "defaults.js",
+files = ["manifest.json", "background.js", "content.js", "content.css", "providers.js", "profile.js", "defaults.js",
          "config.js", "common.js", "ui.css", "welcome.html", "welcome.js", "options.html", "options.js",
          "LICENSE", "THIRD_PARTY_NOTICES.md"] + [f"icons/icon{s}.png" for s in (16, 32, 48, 128)]
 if paywall:

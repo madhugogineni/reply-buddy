@@ -51,12 +51,12 @@
     <h2>Your voice</h2>
     <div id="dropZone" class="drop">
       <div>
-        <b>Upload a voice file</b>
-        <span class="hint" id="voiceName">Drop a .json voice file here, or choose one. It replaces your rules and examples. "Download my voice" saves a backup, including what it learned from your posts.</span>
+        <b>Upload a profile or voice file</b>
+        <span class="hint" id="voiceName">Drop a profile or voice file (.json) here, or choose one. Learned replies are merged; everything else in the file replaces what's here.</span>
       </div>
       <div class="bar" style="margin:0">
-        <button id="importBtn">Upload voice file</button>
-        <button id="export" class="ghost">Download my voice</button>
+        <button id="importBtn">Upload file</button>
+        <button id="export" class="ghost">Download my profile</button>
       </div>
       <input id="importFile" type="file" accept=".json,application/json" class="hidden" />
     </div>
@@ -79,10 +79,29 @@
 
   <div class="card">
     <h2>🤝 Let's connect</h2>
-    <p class="hint">The 🤝 next to the bolt (green on posts asking to connect) opens these with their first name filled in. Pick one and it follows them and replies. {name} becomes their first name, or "man" if it isn't clear.</p>
+    <p class="hint">The 🤝 next to the bolt (green on posts asking to connect) opens these with their first name filled in. Pick one and it replies, likes the post if that box is ticked, and follows them only if you tick "Also follow". {name} becomes their first name, or "man" if it isn't clear.</p>
     <label>Connect replies <span class="hint">one per line</span></label>
     <textarea id="connectTemplates" style="min-height:110px"></textarea>
     <label style="display:flex;gap:8px;align-items:center;font-weight:400"><input id="connectFollow" type="checkbox" style="width:auto" /> Also follow them by default (off unless you turn it on; you can also tick it in the menu each time)</label>
+  </div>
+
+  <div class="card">
+    <h2>🔄 Sync and backup</h2>
+    <p class="hint">Your profile is your voice, learned replies, connect replies and all these settings.</p>
+
+    <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin-top:14px"><input id="syncEnabled" type="checkbox" style="width:auto" /> Sync my profile across my Chrome browsers</label>
+    <p class="hint" style="margin:4px 0 0 26px">Uses Chrome's own sync, so it works wherever you're signed in to Chrome with the same Google account and sync is on. Nothing goes to us. Turn this on in each browser.</p>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin:8px 0 0 26px"><input id="syncKey" type="checkbox" style="width:auto" /> Also sync my API key</label>
+    <p class="hint" id="syncStatus" style="margin:6px 0 0 26px"></p>
+    <div class="bar" style="margin-left:26px"><button id="syncNow" class="ghost">Sync now</button></div>
+
+    <label style="margin-top:22px">Profile file <span class="hint">for another browser (like Orion on iPhone) or a backup</span></label>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:4px"><input id="exportKey" type="checkbox" style="width:auto" /> Include my API key in the file <span class="hint">(anyone with the file can use your key)</span></label>
+    <div class="bar">
+      <button id="exportProfile">Download my profile</button>
+      <button id="importProfile" class="ghost">Upload a profile</button>
+      <input id="importProfileFile" type="file" accept=".json,application/json" class="hidden" />
+    </div>
   </div>
 
   <div class="bar">
@@ -95,6 +114,7 @@
   <script src="config.js"></script>
   <script src="defaults.js"></script>
   <script src="providers.js"></script>
+  <script src="profile.js"></script>
   <script src="common.js"></script>
   <script src="options.js"></script>
 </body>
