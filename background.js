@@ -349,14 +349,9 @@ async function callModels(s, run) {
   throw e;
 }
 
-function buildSystem(s) {
-  const samples = s.samples.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 150);
-  const pairs = s.pairs.slice(0, 40);
-
-  let sys = `You write replies on X (Twitter) as the user${s.about ? ". About them: " + s.about : ""}.
-The reply has to read exactly like they typed it on their phone in a few seconds: a real person, friendly and casual, never an assistant and never a brand.
-
-Always:
+// No thoughts typed: the model comes up with its own reply ideas.
+function freeRules() {
+  return `Always:
 - Match their real length. If their examples are mostly a few words, write a few words. When in doubt, go shorter. Never more than two short sentences.
 - React to the post. Never summarise, restate, paraphrase or explain the post back. Never lecture or give advice nobody asked for.
 - Never use "Great point", "This!", "Couldn't agree more", "Absolutely", "Well said", "Interesting take", "Love this", "Spot on".
@@ -365,13 +360,40 @@ Always:
 - Never invent facts, numbers or personal experiences. Only mention their own experience if it's generic or appears in their examples.
 - Always write reply options. Every post can get a reply.
 - Launches, product drops, "I built this", promos, giveaways, milestones and self-promotion are GOOD posts to reply to: congratulate them, hype them up, or ask one short genuine question about the product (how long it took, what's next, does it do X). Never call these ads or skip them.
-- Only set skip to true for party politics, tragedies or deaths, hate or harassment, and obvious scams or crypto spam. Even then, still write the options and put a short reason in "reason".
+- Only set skip to true for party politics, tragedies or deaths, hate or harassment, and obvious scams or crypto spam. Even then, still write the options and put a short reason in "reason".`;
+}
 
-Their rules for their voice:
+// The user typed their own thoughts: every option is that thought, said well.
+function thoughtRules() {
+  return `This time the user has typed what THEY want to say. Your only job is to turn their thought into a reply they'd be happy to post: the same point, said clearly and naturally. You are their editor, not a co-writer.
+
+Always:
+- Every option says what their thought says. Keep their point, their stance (agree, disagree, joke, question), their facts, numbers, names and experiences. They gave you those, so use them.
+- Do not add new points, arguments, jokes, questions, praise or advice that aren't in their thought. Do not drop any part of what they said. Do not soften or flip their opinion.
+- Polish it: fix typos and grammar (but keep their deliberate habits, like all-lowercase or their slang), cut filler, make it flow and land. It should still sound like them typing, casual and human, not formal, corporate or like an assistant.
+- The options differ only in wording and tightness: one close to their own words just cleaned up, one tighter and punchier, and others somewhere between. Never different ideas.
+- Length follows their thought. Keep it as short as their thought allows, but long enough to carry all of it. Stay under 280 characters.
+- If their thought is only a direction (e.g. "agree", "make a joke", "ask how long it took"), write replies that do exactly that and nothing else.
+- If their thought is written as a note to you ("tell him I tried this and it broke"), write it as the actual reply ("tried this, it broke on me").
+- Reply in the language their thought is written in.
+- No em dashes or en dashes. No hashtags. No lists.
+- Always set skip to false. They've already decided to reply.`;
+}
+
+function buildSystem(s, thought = "") {
+  const samples = s.samples.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 150);
+  const pairs = s.pairs.slice(0, 40);
+
+  let sys = `You write replies on X (Twitter) as the user${s.about ? ". About them: " + s.about : ""}.
+The reply has to read exactly like they typed it on their phone in a few seconds: a real person, friendly and casual, never an assistant and never a brand.
+
+${thought ? thoughtRules() : freeRules()}
+
+Their rules for their voice${thought ? " (use these for HOW it sounds, never to change WHAT they are saying)" : ""}:
 ${s.rules || "(none)"}`;
 
   if (samples.length) {
-    sys += `\n\nReal replies they have written (match this voice, length, spelling quirks and punctuation closely):\n${samples.map((x) => "- " + x).join("\n")}`;
+    sys += `\n\nReal replies they have written (match this voice${thought ? "" : ", length"}, spelling quirks and punctuation closely):\n${samples.map((x) => "- " + x).join("\n")}`;
   }
   if (pairs.length) {
     sys += `\n\nReal posts and how they actually replied:\n${pairs.map((p) => `POST: ${p.post}\nTHEIR REPLY: ${p.reply}`).join("\n\n")}`;
@@ -431,8 +453,12 @@ function buildUser({ post, thread, author, quoted, images, cardText, steer, toMe
   } else if (images && images.length) {
     u += `\n\nIt has image(s). Alt text: ${images.join(" | ")}`;
   }
-  if (steer) u += `\n\nDirection from the user for this reply: ${steer}`;
-  u += `\n\nWrite ${count} reply options.`;
+  if (steer) {
+    u += `\n\n---\n\nWHAT THE USER WANTS TO SAY (rewrite this, polished, as their reply):\n${steer}`;
+    u += `\n\nWrite ${count} polished versions of the user's thought above. Same point in every one, only the wording changes.`;
+  } else {
+    u += `\n\nWrite ${count} reply options.`;
+  }
   return u;
 }
 
@@ -512,7 +538,7 @@ async function suggest(msg) {
         key: s.apiKey,
         model,
         baseUrl: s.baseUrl,
-        system: buildSystem(s),
+        system: buildSystem(s, String(msg.steer || "").trim()),
         user: buildUser(msg, s.count, imgs, pickExamples(s.learned, [msg.post, msg.quoted, msg.cardText].join(" "))),
         images: imgs,
         maxTokens: 500
