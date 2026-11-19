@@ -186,7 +186,8 @@ const jobs = new Map();
 function openJob(url, job) {
   return new Promise((resolve) => {
     chrome.tabs.create({ url, active: false }, (tab) => {
-      if (!tab) return resolve({ ok: false, error: "couldn't open a tab" });
+      // Some browsers (Orion on iOS) can't open background tabs; pass on the real reason.
+      if (!tab) return resolve({ ok: false, error: (chrome.runtime.lastError && chrome.runtime.lastError.message) || "couldn't open a tab" });
       let settled = false;
       const finish = (r) => {
         if (settled) return;
