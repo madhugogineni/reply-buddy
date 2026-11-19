@@ -168,13 +168,7 @@
       toast(connectFollow ? `Following @${handle} and replying…` : "Replying…");
     } else {
       closePanel();
-      const replyBtn = article.querySelector('[data-testid="reply"]');
-      if (!replyBtn) return fallbackCopy(text);
-      replyBtn.click();
-      const editable = await waitFor(() => {
-        const dlg = document.querySelector('[role="dialog"]');
-        return dlg && findEditable(dlg);
-      });
+      const editable = await openComposer(article);
       if (!editable) return fallbackCopy(text);
       await fillComposer(editable, text);
       if (connectFollow) toast(`Following @${handle}. Press Reply to send.`);
@@ -203,6 +197,7 @@
         .join("")}</div>
       <div class="rb-foot"><a href="#" class="rb-settings">Edit these replies</a><span class="rb-meta"></span></div>`;
     document.body.appendChild(panel);
+    guardTouch(panel);
     placePanel(btn);
     panel.querySelector(".rb-x").onclick = closePanel;
     panel.querySelector(".rb-settings").onclick = (e) => {
@@ -213,6 +208,7 @@
     const likeBox = panel.querySelector(".rb-like input");
     panel.querySelectorAll(".rb-opt").forEach((b) => {
       b.onclick = () => {
+        copyNow(options[+b.dataset.i]);
         const follow = followBox.checked;
         const like = likeBox.checked;
         closePanel();
@@ -324,6 +320,7 @@
       <div class="rb-list"></div>
       <div class="rb-foot"><span><a href="#" class="rb-settings">Settings</a> · <a href="#" class="rb-conn">🤝 Connect</a></span><span class="rb-meta"></span></div>`;
     document.body.appendChild(panel);
+    guardTouch(panel);
     placePanel(btn);
     likeDefault().then((on) => {
       const box = panel && panel.querySelector(".rb-like input");
@@ -426,6 +423,7 @@
 
     panel.querySelectorAll(".rb-opt").forEach((b) => {
       b.onclick = () => {
+        copyNow(res.replies[+b.dataset.i]);
         const likeBox = panel && panel.querySelector(".rb-like input");
         ref.like = !!(likeBox && likeBox.checked);
         insertReply(ref, res.replies[+b.dataset.i]);
@@ -450,6 +448,40 @@
     const box = root.querySelector('[data-testid="tweetTextarea_0"]');
     if (!box) return null;
     return box.isContentEditable ? box : box.querySelector('[contenteditable="true"]') || box;
+  }
+
+  // Clicks the post's reply button and waits for the reply box.
+  // Desktop X opens it in a dialog; phone-sized X (Orion on iOS, narrow windows)
+  // navigates to a full /compose/post page with no dialog, so look there too.
+  async function openComposer(article) {
+    const replyBtn = article.querySelector('[data-testid="reply"]');
+    if (!replyBtn) return null;
+    replyBtn.click();
+    return waitFor(() => {
+      const dlg = document.querySelector('[role="dialog"]');
+      const inDlg = dlg && findEditable(dlg);
+      if (inDlg) return inDlg;
+      if (/^\/compose\//.test(location.pathname)) return findEditable(document);
+      return null;
+    }, 8000);
+  }
+
+  const isTouch = () => matchMedia("(pointer: coarse)").matches;
+
+  // iOS only lets a page write to the clipboard during the tap itself. By the time
+  // a fallback runs seconds later the write is ignored and the old clipboard stays.
+  // So on touch devices, copy the picked text right away, inside the tap.
+  function copyNow(text) {
+    if (!isTouch()) return;
+    try {
+      navigator.clipboard.writeText(text).catch(() => {});
+    } catch {}
+  }
+
+  // On phones, X's own page-level touch handlers can swallow swipes that start on
+  // our panel, so the list never scrolls. Keep those touches to ourselves.
+  function guardTouch(el) {
+    ["touchstart", "touchmove"].forEach((t) => el.addEventListener(t, (e) => e.stopPropagation(), { passive: true }));
   }
 
   // Types the reply into X's editor exactly once.
@@ -510,14 +542,7 @@
     closePanel();
     const { autoPost } = await chrome.storage.local.get("autoPost").catch(() => ({}));
     if (autoPost && info.statusId) return enqueue({ statusId: info.statusId, text, post: info.post });
-    const replyBtn = article.querySelector('[data-testid="reply"]');
-    if (!replyBtn) return fallbackCopy(text);
-    replyBtn.click();
-
-    const editable = await waitFor(() => {
-      const dlg = document.querySelector('[role="dialog"]');
-      return dlg && findEditable(dlg);
-    });
+    const editable = await openComposer(article);
     if (!editable) return fallbackCopy(text);
 
     await fillComposer(editable, text);
@@ -625,7 +650,7 @@
       const r = await safeSend({ type: "followUser", handle: item.handle });
       const rest = (await getQ()).q.filter((x) => x.id !== item.id);
       await chrome.storage.local.set({ rbQueue: rest });
-      toast(r && r.ok ? (r.already ? `Already following @${item.handle}` : `Followed @${item.handle} ✓`) : `Couldn't follow @${item.handle}`);
+      toast(r && r.ok ? (r.already ? `Already following @${item.handle}` : `Followed @${item.handle} ✓`) : `Couldn't follow @${item.handle}${r && r.error ? ` (${r.error})` : ""}`);
       return renderPill();
     }
     const res = await safeSend({ type: "postReply", statusId: item.statusId, text: item.text });

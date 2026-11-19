@@ -23,7 +23,9 @@
   position: fixed;
   z-index: 2147483000;
   width: 360px;
-  max-height: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: min(320px, calc(100vh - 24px));
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   background: #fff;
@@ -60,7 +62,15 @@
 @keyframes rb-rot { to { transform: rotate(360deg); } }
 .rb-sub { text-align: center; font-size: 12px; opacity: 0.6; margin-top: -10px; padding-bottom: 8px; }
 
-.rb-list { overflow-y: auto; padding: 0 8px 4px; }
+/* min-height: 0 lets the list shrink inside the panel so it can scroll. The rest
+   keeps a swipe on the list scrolling the list on phones (iOS/Orion) instead of
+   being eaten by the page. */
+.rb-list {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain; touch-action: pan-y;
+  padding: 0 8px 4px;
+}
 .rb-opt {
   display: block; width: 100%; text-align: left; position: relative;
   background: transparent; color: inherit; font: inherit;
